@@ -5,6 +5,7 @@ import dotenv from "dotenv";
 import authRoutes from "./routes/auth.routes.js";
 import groupRoutes from "./routes/group.routes.js";
 import { requireAuth } from "./middleware/auth.middleware.js";
+import joinRoutes from "./routes/join.routes.js";
 
 dotenv.config();
 const app = express();
@@ -15,7 +16,7 @@ app.use(express.json());
 // Register routes
 app.use("/auth", authRoutes);
 app.use("/groups", groupRoutes);
-
+app.use("/", joinRoutes); // mounts:
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () =>
   console.log(`API listening on http://localhost:${PORT}`)
