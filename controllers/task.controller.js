@@ -1,9 +1,4 @@
-// controllers/task.controller.js
 
-/* =========================
-   Create a task
-   POST /groups/:groupId/tasks
-========================= */
 export async function createTask(req, res) {
   const pbUser = req.pbUser;
   const { groupId } = req.params;
