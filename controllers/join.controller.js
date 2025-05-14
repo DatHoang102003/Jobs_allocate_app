@@ -1,12 +1,11 @@
 // controllers/join.controller.js
 import { pbAdmin } from "../services/pocketbase.js"; // super-user client
 
-/* =========================
-   Send a join request
-   POST /groups/:groupId/join
-========================= */
+/* ====================================================
+   POST /groups/:groupId/join  ──  Send a join request
+==================================================== */
 export async function sendJoinRequest(req, res) {
-  const pbUser = req.pbUser;
+  const pbUser = req.pbUser; // user-scoped PB client (has auth cookie)
   const userId = req.user.id;
   const groupId = req.params.groupId;
 
@@ -16,57 +15,98 @@ export async function sendJoinRequest(req, res) {
       group: groupId,
       status: "pending",
     });
+
     return res.status(201).json(jr);
   } catch (err) {
     console.error("sendJoinRequest error:", err.response?.data || err);
-    return res.status(400).json({ error: err.message });
+    return res.status(err?.status || 500).json({ error: err.message });
   }
 }
+// export async function listJoinRequests(req, res) {
+//   const userId = req.user?.id;
+//   if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
-/* =========================
-   List my join requests
-   GET /join_requests
-========================= */
+//   try {
+//     const result = await pbAdmin.collection("join_requests").getList(1, 200);
+//     const myReqs = result.items.filter((r) => r.user === userId);
+//     return res.json(myReqs);
+//   } catch (err) {
+//     console.error("listJoinRequests error:", err.response?.data || err);
+//     return res.status(err?.status || 500).json({ error: err.message });
+//   }
+// }
+// controllers/join.controller.js
 export async function listJoinRequests(req, res) {
-  const pbUser = req.pbUser;
-  const userId = req.user.id;
+  const userId = req.user?.id;
+  if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+  /* optional pagination (?page & perPage) */
+  const page = parseInt(req.query.page, 10) || 1;
+  const perPage = parseInt(req.query.perPage, 10) || 500;
+
+  const params = {
+    filter: `user="${userId}"`, // only my requests
+    sort: "-created", // newest first
+    expand: "group,user", // include related data
+  };
 
   try {
-    const myReqs = await pbUser.collection("join_requests").getFullList({
-      filter: `user="${userId}"`,
-      sort: "-created",
-    });
-    return res.json(myReqs);
+    /* paginate if the client asked for it, else full list */
+    if (req.query.page || req.query.perPage) {
+      const result = await req.pbUser
+        .collection("join_requests")
+        .getList(page, perPage, params);
+
+      return res.json({
+        page: result.page,
+        perPage: result.perPage,
+        totalItems: result.totalItems,
+        totalPages: result.totalPages,
+        items: result.items,
+      });
+    }
+
+    /* no pagination → just return everything */
+    const items = await req.pbUser
+      .collection("join_requests")
+      .getFullList(params);
+
+    return res.json(items);
   } catch (err) {
     console.error("listJoinRequests error:", err.response?.data || err);
-    return res.status(400).json({ error: err.message });
+    /* 400 = PB rule / filter error; everything else 500 */
+    const status = err.status && err.status !== 0 ? err.status : 500;
+    return res.status(status).json({
+      error:
+        err.response?.data?.message ||
+        err.message ||
+        "Failed to list your join requests.",
+    });
   }
 }
 
-/* =========================
-   Approve a join request
-   POST /join_requests/:jrId/approve
-========================= */
+/* ====================================================
+   POST /join_requests/:jrId/approve  ──  Owner only
+==================================================== */
 export async function approveJoinRequest(req, res) {
   const pbUser = req.pbUser;
   const userId = req.user.id;
   const jrId = req.params.jrId;
 
   try {
-    // 1) fetch the join request
+    // 1) Fetch join-request and its group
     const jr = await pbUser.collection("join_requests").getOne(jrId);
     const group = await pbUser.collection("groups").getOne(jr.group);
 
-    if (group.owner !== userId) {
+    if (group.owner !== userId)
       return res.status(403).json({ error: "Forbidden" });
-    }
 
-    // 2) mark approved (owner is allowed by API rule)
+    // 2) Mark approved (owner passes Update rule)
     await pbUser
       .collection("join_requests")
       .update(jrId, { status: "approved" });
 
-    // 3) create membership with admin client (bypasses create=false rule)
+    // 3) Create membership with admin client (ignores create=false rule)
     await pbAdmin.collection("memberships").create({
       user: jr.user,
       group: jr.group,
@@ -76,14 +116,13 @@ export async function approveJoinRequest(req, res) {
     return res.json({ ok: true });
   } catch (err) {
     console.error("approveJoinRequest error:", err.response?.data || err);
-    return res.status(400).json({ error: err.message });
+    return res.status(err?.status || 500).json({ error: err.message });
   }
 }
 
-/* =========================
-   Reject a join request
-   POST /join_requests/:jrId/reject
-========================= */
+/* ====================================================
+   POST /join_requests/:jrId/reject  ──  Owner only
+==================================================== */
 export async function rejectJoinRequest(req, res) {
   const pbUser = req.pbUser;
   const userId = req.user.id;
@@ -93,16 +132,16 @@ export async function rejectJoinRequest(req, res) {
     const jr = await pbUser.collection("join_requests").getOne(jrId);
     const group = await pbUser.collection("groups").getOne(jr.group);
 
-    if (group.owner !== userId) {
+    if (group.owner !== userId)
       return res.status(403).json({ error: "Forbidden" });
-    }
 
     await pbUser
       .collection("join_requests")
       .update(jrId, { status: "rejected" });
+
     return res.json({ ok: true });
   } catch (err) {
     console.error("rejectJoinRequest error:", err.response?.data || err);
-    return res.status(400).json({ error: err.message });
+    return res.status(err?.status || 500).json({ error: err.message });
   }
 }

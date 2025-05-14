@@ -11,20 +11,13 @@ export async function requireAuth(req, res, next) {
   }
 
   const token = header.split(" ")[1];
-
   try {
-    // fresh client per request
     const pbUser = new PocketBase(PB_URL);
+    pbUser.authStore.save(token, ""); // save token to PB client
+    await pbUser.collection("users").authRefresh(); // fetch valid user
 
-    // 1️⃣ store the token in the auth-store
-    pbUser.authStore.save(token, ""); // second arg = empty model JSON
-
-    // 2️⃣ validate & fetch the user model
-    await pbUser.collection("users").authRefresh(); // uses token in authStore
-
-    // 3️⃣ attach to request
     req.pbUser = pbUser;
-    req.user = pbUser.authStore.model; // non-null now
+    req.user = pbUser.authStore.model;
 
     return next();
   } catch (err) {
