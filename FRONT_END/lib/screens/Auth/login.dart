@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-
+import 'package:task_manager_app/services/auth_service.dart';
 import '../../navigation_manager.dart';
 import 'register.dart';
 import '../home.dart';
@@ -16,20 +16,26 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
 
-  void _handleLogin() {
+  void _handleLogin() async {
     final email = _emailController.text.trim();
     final password = _passwordController.text;
 
     if (email.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Vui lòng nhập email và mật khẩu")),
+        const SnackBar(content: Text("Please enter your email and password")),
       );
       return;
     }
 
-    // TODO: Replace with real authentication
-    // Giả sử đăng nhập thành công:
-    NavigationManager.push(const HomeScreen());
+    final success = await AuthService.loginUser(email, password);
+
+    if (success) {
+      NavigationManager.push(const HomeScreen());
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Login failed. Please try again.")),
+      );
+    }
   }
 
   @override
@@ -54,10 +60,12 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 20),
               SizedBox(
                 height: 160,
-                child: Image.asset(
-                  'assets/login_illustration.png',
-                  fit: BoxFit.contain,
-                ),
+                // child: Image.asset(
+                //   'assets/login_illustration.png',
+                //   fit: BoxFit.contain,
+                // ),
+                child:
+                    Icon(Icons.account_circle, size: 150, color: Colors.black),
               ),
               const SizedBox(height: 20),
               TextField(

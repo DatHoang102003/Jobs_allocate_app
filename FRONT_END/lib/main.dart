@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:task_manager_app/screens/Auth/login.dart';
 import 'package:task_manager_app/screens/Auth/register.dart';
 import 'navigation.dart';
 import 'navigation_manager.dart';
@@ -27,7 +28,7 @@ class MyApp extends StatelessWidget {
           colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
           useMaterial3: true,
         ),
-        home: const RegisterScreen(),
+        home: const LoginScreen(),
         routes: {
           RegisterScreen.routeName: (context) => const RegisterScreen(),
           BottomNavScreen.routeName: (context) => const BottomNavScreen(),
