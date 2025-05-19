@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:task_manager_app/screens/register.dart';
+import 'package:task_manager_app/screens/Auth/register.dart';
 import 'bottom_nav.dart';
 import 'navigation_manager.dart';
 
@@ -19,14 +19,13 @@ class MyApp extends StatelessWidget {
       ],
       child: MaterialApp(
         title: 'Task Manager',
-        navigatorKey: NavigationManager.navigatorKey, // Gắn navigator key
+        navigatorKey: NavigationManager.navigatorKey,
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
           colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
           useMaterial3: true,
         ),
-        home:
-            const BottomNavScreen(), // Trang khởi động được sửa thành BottomNav
+        home: const BottomNavScreen(),
         routes: {
           RegisterScreen.routeName: (context) => const RegisterScreen(),
           BottomNavScreen.routeName: (context) => const BottomNavScreen(),

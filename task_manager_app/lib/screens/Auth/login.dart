@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../navigation_manager.dart';
+import '../../navigation_manager.dart';
 import 'register.dart';
-import 'home.dart';
+import '../home.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({Key? key}) : super(key: key);

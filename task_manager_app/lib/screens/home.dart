@@ -1,61 +1,128 @@
 import 'package:flutter/material.dart';
 
+import '../models/groups.dart';
+import 'Auth/account_manager.dart';
+import 'Groups/groups_manager.dart';
+import 'Tasks/tasks_manager.dart';
+
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final currentGroup = mockGroups.first;
+    final currentTasks = mockTasks;
+    final assignedUser = (String id) => mockUsers
+        .firstWhere((u) => u.username == id, orElse: () => mockUsers[0]);
+
     return Scaffold(
       backgroundColor: const Color(0xFFEDE8E6),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFFA3DAD6),
-        title: const Text(
-          'Trang chủ',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Dashboard',
+                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                  ),
+                  Icon(Icons.add_box_rounded, color: Colors.deepPurple),
+                ],
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                decoration: InputDecoration(
+                  hintText: "Search",
+                  prefixIcon: const Icon(Icons.search),
+                  suffixIcon: const Icon(Icons.tune),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  fillColor: Colors.white,
+                  filled: true,
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'Your project',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+              ),
+              const SizedBox(height: 12),
+              ProjectCard(group: currentGroup),
+              const SizedBox(height: 20),
+              const SizedBox(height: 20),
+              const Text(
+                'Your recent tasks',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+              ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: ListView.builder(
+                  itemCount: currentTasks.length,
+                  itemBuilder: (context, index) {
+                    final task = currentTasks[index];
+                    final user = assignedUser(task.assignUserId);
+                    return TaskCard(
+                      title: task.title,
+                      deadline: task.deadline,
+                      assignee: user.fullName,
+                    );
+                  },
+                ),
+              ),
+            ],
           ),
         ),
-        centerTitle: true,
-        elevation: 0,
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
+    );
+  }
+}
+
+class ProjectCard extends StatelessWidget {
+  final Group group;
+
+  const ProjectCard({super.key, required this.group});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Xin chào!',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-              ),
+            Text(group.name,
+                style:
+                    const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Icon(Icons.calendar_today, size: 16, color: Colors.grey),
+                const SizedBox(width: 4),
+                Text(
+                  "Created: ${group.created.toLocal().toString().split(' ')[0]}",
+                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+                const Spacer(),
+                const Icon(Icons.update, size: 16, color: Colors.grey),
+                const SizedBox(width: 4),
+                Text(
+                  "Updated: ${group.updated.toLocal().toString().split(' ')[0]}",
+                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+              ],
             ),
             const SizedBox(height: 12),
-            const Text(
-              'Dưới đây là danh sách các nhiệm vụ hôm nay:',
-              style: TextStyle(fontSize: 16),
-            ),
-            const SizedBox(height: 16),
-
-            // Danh sách nhiệm vụ mẫu
-            Expanded(
-              child: ListView(
-                children: const [
-                  TaskItem(
-                    title: 'Học Flutter',
-                    subtitle: 'Hoàn thành màn hình đăng nhập',
-                  ),
-                  TaskItem(
-                    title: 'Họp nhóm',
-                    subtitle: 'Thảo luận chức năng chia sẻ công việc',
-                  ),
-                  TaskItem(
-                    title: 'Thiết kế UI',
-                    subtitle: 'Tạo wireframe cho màn quản lý nhóm',
-                  ),
-                ],
-              ),
+            Text(
+              group.description,
+              style: const TextStyle(fontSize: 14),
             ),
           ],
         ),
@@ -64,29 +131,30 @@ class HomeScreen extends StatelessWidget {
   }
 }
 
-class TaskItem extends StatelessWidget {
+class TaskCard extends StatelessWidget {
   final String title;
-  final String subtitle;
+  final DateTime? deadline;
+  final String assignee;
 
-  const TaskItem({
+  const TaskCard({
     super.key,
     required this.title,
-    required this.subtitle,
+    this.deadline,
+    required this.assignee,
   });
 
   @override
   Widget build(BuildContext context) {
     return Card(
-      margin: const EdgeInsets.symmetric(vertical: 8),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      margin: const EdgeInsets.symmetric(vertical: 8),
       child: ListTile(
-        leading: const Icon(Icons.check_circle_outline, color: Colors.orange),
+        leading: const Icon(Icons.task_outlined, color: Colors.deepPurple),
         title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
-        subtitle: Text(subtitle),
-        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-        onTap: () {
-          // TODO: Điều hướng đến chi tiết công việc
-        },
+        subtitle: Text(
+            "Deadline: ${deadline?.toLocal().toString().split(' ')[0]} • Assigned to: $assignee"),
+        trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
+        onTap: () {},
       ),
     );
   }

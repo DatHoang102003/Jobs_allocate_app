@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../navigation_manager.dart';
+import '../../navigation_manager.dart';
 import 'login.dart';
 
 class RegisterScreen extends StatefulWidget {
