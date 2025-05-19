@@ -1,6 +1,10 @@
 import express from "express";
 import { requireAuth } from "../middleware/auth.middleware.js";
-import { createGroup, listGroups } from "../controllers/group.controller.js";
+import {
+  createGroup,
+  listGroups,
+  listPublicGroups,
+} from "../controllers/group.controller.js";
 
 const router = express.Router();
 /**
@@ -56,5 +60,37 @@ router.post("/", requireAuth, createGroup);
  *         description: Unauthorized
  */
 router.get("/", requireAuth, listGroups);
+/**
+ * @swagger
+ * /groups/explore:
+ *   get:
+ *     summary: List public groups that users can browse and join
+ *     tags: [Groups]
+ *     responses:
+ *       200:
+ *         description: Array of public groups
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   id:
+ *                     type: string
+ *                   name:
+ *                     type: string
+ *                   description:
+ *                     type: string
+ *                   owner:
+ *                     type: string
+ *                   isPublic:
+ *                     type: boolean
+ *                   created:
+ *                     type: string
+ *                   updated:
+ *                     type: string
+ */
 
+router.get("/explore", listPublicGroups);
 export default router;

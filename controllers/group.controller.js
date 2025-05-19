@@ -1,19 +1,23 @@
 // controllers/group.controller.js
 import { pbAdmin } from "../services/pocketbase.js";
 
+// controllers/group.controller.js
 export async function createGroup(req, res) {
   const { name, description } = req.body;
+
+  // Default to true unless explicitly false
+  const isPublic = req.body.isPublic === false ? false : true;
+
   const pbUser = req.pbUser;
 
   try {
-    // 1) Create group as the logged-in user
     const group = await pbUser.collection("groups").create({
       name,
       description,
       owner: req.user.id,
+      isPublic, // ← always defined now
     });
 
-    // 2) Auto-add membership (role=admin) using the admin client
     await pbAdmin.collection("memberships").create({
       user: req.user.id,
       group: group.id,
@@ -22,10 +26,8 @@ export async function createGroup(req, res) {
 
     return res.status(201).json(group);
   } catch (err) {
-    console.error("❌ createGroup full error:", err);
-    console.error("❌ createGroup error.data:", err.response?.data);
-    console.error("❌ createGroup error.message:", err.message);
-    return res.status(400).json({ error: err.message || "Unknown error" });
+    console.error("createGroup error:", err.response?.data || err);
+    return res.status(400).json({ error: err.message });
   }
 }
 
@@ -58,5 +60,17 @@ export async function listGroups(req, res) {
   } catch (err) {
     console.error("listGroups error:", err.response?.data || err);
     return res.status(400).json({ error: err.message || "Fetch failed" });
+  }
+}
+export async function listPublicGroups(req, res) {
+  try {
+    const groups = await pbAdmin.collection("groups").getFullList({
+      filter: "isPublic=true",
+      sort: "-created",
+    });
+    res.json(groups);
+  } catch (err) {
+    console.error("listPublicGroups error:", err.response?.data || err);
+    res.status(400).json({ error: err.message });
   }
 }
