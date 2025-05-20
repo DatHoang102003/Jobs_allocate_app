@@ -56,4 +56,9 @@ class AuthService {
       return false;
     }
   }
+
+  static Future<void> logoutUser() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('auth_token'); // Clear saved token
+  }
 }

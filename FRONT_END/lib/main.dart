@@ -1,14 +1,37 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
+import 'package:task_manager_app/services/user_service.dart';
+import 'package:task_manager_app/services/auth_service.dart'; // if you call logout globally
+import 'package:task_manager_app/navigation_manager.dart';
+import 'package:task_manager_app/navigation.dart'; // BottomNavScreen
 import 'package:task_manager_app/screens/Auth/login.dart';
 import 'package:task_manager_app/screens/Auth/register.dart';
-import 'navigation.dart';
-import 'navigation_manager.dart';
-import 'screens/Groups/groups.dart';
-import 'screens/Tasks/task.dart';
+import 'package:task_manager_app/screens/Groups/groups.dart';
+import 'package:task_manager_app/screens/Tasks/task.dart';
 
 void main() {
   runApp(const MyApp());
+}
+
+class SplashScreen extends StatelessWidget {
+  const SplashScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<bool>(
+      future: UserService.isTokenValid(),
+      builder: (ctx, snap) {
+        if (!snap.hasData) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+        final loggedIn = snap.data!;
+        return loggedIn ? const BottomNavScreen() : const LoginScreen();
+      },
+    );
+  }
 }
 
 class MyApp extends StatelessWidget {
@@ -28,12 +51,13 @@ class MyApp extends StatelessWidget {
           colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
           useMaterial3: true,
         ),
-        home: const LoginScreen(),
+        home: const SplashScreen(),
         routes: {
-          RegisterScreen.routeName: (context) => const RegisterScreen(),
-          BottomNavScreen.routeName: (context) => const BottomNavScreen(),
-          TaskScreen.routeName: (context) => const TaskScreen(),
-          GroupScreen.routeName: (context) => const GroupScreen(),
+          RegisterScreen.routeName: (_) => const RegisterScreen(),
+          BottomNavScreen.routeName: (_) => const BottomNavScreen(),
+          TaskScreen.routeName: (_) => const TaskScreen(),
+          GroupScreen.routeName: (_) => const GroupScreen(),
+          '/login': (_) => const LoginScreen(),
         },
       ),
     );

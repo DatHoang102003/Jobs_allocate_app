@@ -1,37 +1,41 @@
 import PocketBase from "pocketbase";
 import multer from "multer";
 
-// Optional: if you're handling file upload middleware
 export const upload = multer({ storage: multer.memoryStorage() });
 
+/* ───────────────── GET /me ───────────────── */
 export async function getMyProfile(req, res) {
   try {
-    const user = req.user;
-    res.json(user); // Already sanitized from PB authStore
+    res.json(req.user);
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
 }
 
+/* ─────────────── PATCH /me (update + avatar) ─────────────── */
 export async function updateMyProfile(req, res) {
   const pbUser = req.pbUser;
   const userId = req.user.id;
-  const { name, email, password, passwordConfirm } = req.body;
-  const avatarFile = req.file; // if using multer
+
+  // Multer makes sure req.body is at least an object
+  const { name, email, password, passwordConfirm } = req.body || {};
+  const avatarFile = req.file; // set if upload.single('avatar') matched
 
   try {
-    const formData = new FormData();
+    const formData = new FormData(); // global in Node 18+
 
     if (name) formData.append("name", name);
     if (email) formData.append("email", email);
+
     if (password && passwordConfirm) {
       formData.append("password", password);
       formData.append("passwordConfirm", passwordConfirm);
     }
 
-    // Only if image is sent
+    /* ---- wrap Buffer in Blob so FormData accepts it ---- */
     if (avatarFile) {
-      formData.append("avatar", avatarFile.buffer, avatarFile.originalname);
+      const blob = new Blob([avatarFile.buffer], { type: avatarFile.mimetype });
+      formData.append("avatar", blob, avatarFile.originalname);
     }
 
     const updated = await pbUser.collection("users").update(userId, formData);

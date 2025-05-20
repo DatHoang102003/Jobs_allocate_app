@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:task_manager_app/screens/Auth/login.dart';
 import 'package:task_manager_app/screens/Groups/create_dialog.dart';
+import 'package:task_manager_app/screens/Personal/user_profile.dart';
+import 'package:task_manager_app/services/auth_service.dart';
 
 import '../models/groups.dart';
 import 'Auth/account_manager.dart';
@@ -192,9 +195,17 @@ class CustomDrawer extends StatelessWidget {
       child: Column(
         children: [
           const SizedBox(height: 50),
-          const CircleAvatar(
-            radius: 40,
-            backgroundImage: AssetImage('assets/avatar.png'), // Thay avatar
+          GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const UserProfileScreen()),
+              );
+            },
+            child: const CircleAvatar(
+              radius: 40,
+              backgroundImage: AssetImage('assets/images/blueavatar.jpg'),
+            ),
           ),
           const SizedBox(height: 10),
           const Text('@jacksparrow009',
@@ -230,7 +241,14 @@ class CustomDrawer extends StatelessWidget {
           ListTile(
             leading: const Icon(Icons.logout),
             title: const Text('Log out'),
-            onTap: () {},
+            onTap: () async {
+              await AuthService.logoutUser();
+
+              Navigator.of(context).pushAndRemoveUntil(
+                MaterialPageRoute(builder: (_) => const LoginScreen()),
+                (route) => false,
+              );
+            },
           ),
           const SizedBox(height: 20),
         ],

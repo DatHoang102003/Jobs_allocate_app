@@ -42,8 +42,7 @@ class BottomNavScreen extends StatelessWidget {
                 children: [
                   CircleAvatar(
                     radius: 30,
-                    backgroundImage: AssetImage(
-                        'assets/images/profile.png'), // thay bằng ảnh đại diện phù hợp
+                    backgroundImage: AssetImage('assets/images/blueavatar.jpg'),
                   ),
                   SizedBox(height: 8),
                   Text(
@@ -73,10 +72,10 @@ class BottomNavScreen extends StatelessWidget {
           ],
         ),
       ),
-      appBar: AppBar(
-        title: Text(titles[selectedIndex]),
-        backgroundColor: Colors.deepPurple,
-      ),
+      // appBar: AppBar(
+      //   title: Text(titles[selectedIndex]),
+      //   backgroundColor: Colors.deepPurple,
+      // ),
       body: screens[selectedIndex],
     );
   }
