@@ -6,7 +6,6 @@ import 'package:task_manager_app/services/auth_service.dart';
 import 'package:task_manager_app/services/user_service.dart';
 
 import '../models/groups.dart';
-import 'Auth/account_manager.dart';
 import 'Groups/groups_manager.dart';
 import 'Tasks/tasks_manager.dart';
 
@@ -17,8 +16,6 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final currentGroup = mockGroups.first;
     final currentTasks = mockTasks;
-    final assignedUser = (String id) => mockUsers
-        .firstWhere((u) => u.username == id, orElse: () => mockUsers[0]);
 
     return Scaffold(
       backgroundColor: const Color(0xFFEDE8E6),
@@ -73,11 +70,9 @@ class HomeScreen extends StatelessWidget {
                   itemCount: currentTasks.length,
                   itemBuilder: (context, index) {
                     final task = currentTasks[index];
-                    final user = assignedUser(task.assignUserId);
                     return TaskCard(
                       title: task.title,
                       deadline: task.deadline,
-                      assignee: user.fullName,
                     );
                   },
                 ),
@@ -160,13 +155,11 @@ class ProjectCard extends StatelessWidget {
 class TaskCard extends StatelessWidget {
   final String title;
   final DateTime? deadline;
-  final String assignee;
 
   const TaskCard({
     super.key,
     required this.title,
     this.deadline,
-    required this.assignee,
   });
 
   @override
@@ -177,8 +170,8 @@ class TaskCard extends StatelessWidget {
       child: ListTile(
         leading: const Icon(Icons.task_outlined, color: Colors.deepPurple),
         title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
-        subtitle: Text(
-            "Deadline: ${deadline?.toLocal().toString().split(' ')[0]} • Assigned to: $assignee"),
+        subtitle:
+            Text("Deadline: ${deadline?.toLocal().toString().split(' ')[0]} "),
         trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
         onTap: () {},
       ),

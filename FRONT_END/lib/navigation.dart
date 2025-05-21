@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'navigation_manager.dart';
-import 'screens/Auth/account.dart';
 import 'screens/Groups/groups.dart';
 import 'screens/home.dart';
 import 'screens/Tasks/task.dart';
@@ -22,7 +21,6 @@ class BottomNavScreen extends StatelessWidget {
       HomeScreen(),
       GroupScreen(),
       TaskScreen(),
-      AccountScreen(),
     ];
 
     return Scaffold(
