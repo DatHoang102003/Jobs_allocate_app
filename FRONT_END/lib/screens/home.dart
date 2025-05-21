@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:task_manager_app/screens/Auth/account.dart';
 import 'package:task_manager_app/screens/Auth/login.dart';
 import 'package:task_manager_app/screens/Groups/create_dialog.dart';
-import 'package:task_manager_app/screens/Personal/user_profile.dart';
 import 'package:task_manager_app/services/auth_service.dart';
+import 'package:task_manager_app/services/user_service.dart';
 
 import '../models/groups.dart';
 import 'Auth/account_manager.dart';
@@ -194,24 +195,58 @@ class CustomDrawer extends StatelessWidget {
       backgroundColor: Colors.deepPurple.shade100.withOpacity(0.9),
       child: Column(
         children: [
-          const SizedBox(height: 50),
-          GestureDetector(
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const UserProfileScreen()),
+          FutureBuilder<Map<String, dynamic>?>(
+            future: _drawerProfile(), // backend helper
+            builder: (context, snap) {
+              // while loading
+              if (snap.connectionState != ConnectionState.done) {
+                return const SizedBox(
+                  height: 180,
+                  child: Center(child: CircularProgressIndicator()),
+                );
+              }
+
+              // if fetch failed -> fallback to old dummy
+              final data = snap.data;
+              final avatarUrl = data?['avatarUrl'] as String?;
+              final name = data?['name'] as String? ?? 'Mr. Jack';
+              final username = data?['username'] as String? ?? 'jacksparrow009';
+
+              return Column(
+                children: [
+                  const SizedBox(height: 50),
+                  GestureDetector(
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const AccountScreen()),
+                    ),
+                    child: CircleAvatar(
+                      radius: 40,
+                      backgroundImage: avatarUrl != null
+                          ? NetworkImage(avatarUrl)
+                          : const AssetImage('assets/images/blueavatar.jpg')
+                              as ImageProvider,
+                      child: avatarUrl == null
+                          ? const Icon(Icons.person,
+                              size: 40, color: Colors.white)
+                          : null,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(name,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold, color: Colors.black)),
+                  Text('$username',
+                      style: const TextStyle(color: Colors.black54)),
+                  TextButton(
+                      onPressed: () {}, child: const Text('Edit Profile')),
+                  const Divider(),
+                ],
               );
             },
-            child: const CircleAvatar(
-              radius: 40,
-              backgroundImage: AssetImage('assets/images/blueavatar.jpg'),
-            ),
           ),
-          const SizedBox(height: 10),
-          const Text('@jacksparrow009',
-              style: TextStyle(fontWeight: FontWeight.bold)),
-          TextButton(onPressed: () {}, child: const Text('Edit Profile')),
-          const Divider(),
+
+          /* ------------- items below untouched ------------- */
           ListTile(
             leading: const Icon(Icons.home),
             title: const Text('Home'),
@@ -243,10 +278,9 @@ class CustomDrawer extends StatelessWidget {
             title: const Text('Log out'),
             onTap: () async {
               await AuthService.logoutUser();
-
               Navigator.of(context).pushAndRemoveUntil(
                 MaterialPageRoute(builder: (_) => const LoginScreen()),
-                (route) => false,
+                (_) => false,
               );
             },
           ),
@@ -254,5 +288,11 @@ class CustomDrawer extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  /* ---- helper returns {name, username, avatarUrl} or null on error ---- */
+  Future<Map<String, dynamic>?> _drawerProfile() async {
+    final data = await UserService.getDrawerProfile();
+    return data;
   }
 }

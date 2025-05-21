@@ -74,4 +74,73 @@ class UserService {
     final resp = await request.send();
     return resp.statusCode == 200;
   }
+
+  static Future<Map<String, dynamic>?> getDrawerProfile() async {
+    final data = await getUserProfile();
+    if (data == null) return null;
+
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('auth_token') ?? '';
+
+    final avatarFile = data['avatar'];
+    if (avatarFile != null && avatarFile.toString().isNotEmpty) {
+      data['avatarUrl'] = 'http://10.0.2.2:8090/api/files/_pb_users_auth_/'
+          '${data['id']}/$avatarFile?token=$token';
+    } else {
+      data['avatarUrl'] = null;
+    }
+
+    return {
+      'name': data['name'] ?? '',
+      'username': data['username'] ?? data['email'] ?? '',
+      'avatarUrl': data['avatarUrl'],
+    };
+  }
+
+  static Future<Map<String, dynamic>?> _rawProfile() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('auth_token');
+
+    if (token == null) {
+      print('⚠️  No token found – user not logged in');
+      return null;
+    }
+
+    final res = await http.get(
+      Uri.parse('$_baseUrl/me'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+
+    print('📡 GET /me → status: ${res.statusCode}');
+    print('📡 response body: ${res.body}');
+
+    if (res.statusCode == 200) {
+      try {
+        final data = jsonDecode(res.body) as Map<String, dynamic>;
+        print('✅ Parsed user profile: $data');
+        return data;
+      } catch (e) {
+        print('❌ JSON parse error: $e');
+        return null;
+      }
+    }
+
+    print('❌ Failed to fetch profile – status ${res.statusCode}');
+    return null;
+  }
+
+  static Future<Map<String, dynamic>?> getProfile() async {
+    final data = await _rawProfile();
+    if (data == null) return null;
+
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('auth_token') ?? '';
+    final avatar = data['avatar'];
+
+    data['avatarUrl'] = (avatar != null && avatar.toString().isNotEmpty)
+        ? 'http://10.0.2.2:8090/api/files/_pb_users_auth_/${data['id']}/$avatar?token=$token'
+        : null;
+
+    return data;
+  }
 }

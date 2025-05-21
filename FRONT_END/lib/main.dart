@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'package:task_manager_app/services/user_service.dart';
-import 'package:task_manager_app/services/auth_service.dart'; // if you call logout globally
 import 'package:task_manager_app/navigation_manager.dart';
 import 'package:task_manager_app/navigation.dart'; // BottomNavScreen
 import 'package:task_manager_app/screens/Auth/login.dart';
