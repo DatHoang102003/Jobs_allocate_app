@@ -4,6 +4,7 @@ import {
   createGroup,
   listGroups,
   listPublicGroups,
+  getGroupDetails,
 } from "../controllers/group.controller.js";
 
 const router = express.Router();
@@ -93,4 +94,27 @@ router.get("/", requireAuth, listGroups);
  */
 
 router.get("/explore", listPublicGroups);
+/**
+ * @swagger
+ * /groups/{groupId}:
+ *   get:
+ *     summary: Get full details of a specific group
+ *     tags: [Groups]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: groupId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Group object with members and tasks
+ *       400:
+ *         description: Invalid ID or fetch error
+ *       401:
+ *         description: Unauthorized
+ */
+router.get("/:groupId", requireAuth, getGroupDetails);
 export default router;

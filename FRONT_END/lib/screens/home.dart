@@ -1,91 +1,97 @@
 import 'package:flutter/material.dart';
-import 'package:task_manager_app/screens/Auth/account.dart';
-import 'package:task_manager_app/screens/Auth/login.dart';
-import 'package:task_manager_app/screens/Groups/create_dialog.dart';
-import 'package:task_manager_app/services/auth_service.dart';
-import 'package:task_manager_app/services/user_service.dart';
+import 'package:provider/provider.dart';
+import 'package:task_manager_app/models/groups.dart';
+import 'package:task_manager_app/screens/Groups/groups_manager.dart';
+import 'package:task_manager_app/screens/Tasks/tasks_manager.dart';
+import 'Auth/account.dart';
+import 'Auth/login.dart';
+import 'Groups/create_dialog.dart';
+import '../services/auth_service.dart';
+import '../services/user_service.dart';
 
-import '../models/groups.dart';
-import 'Groups/groups_manager.dart';
-import 'Tasks/tasks_manager.dart';
-
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final currentGroup = mockGroups.first;
-    final currentTasks = mockTasks;
+  State<HomeScreen> createState() => _HomeScreenState();
+}
 
+class _HomeScreenState extends State<HomeScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // kick off both loads once
+    final gp = context.read<GroupsProvider>();
+    final tp = context.read<TasksProvider>();
+    if (gp.groups.isEmpty) gp.fetchGroups();
+    if (tp.tasks.isEmpty) tp.fetchRecent();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final groupsProv = context.watch<GroupsProvider>();
+    final tasksProv = context.watch<TasksProvider>();
+
+    final loading = groupsProv.isLoading || tasksProv.isLoading;
+
+    /* ------------ UI ------------ */
     return Scaffold(
       backgroundColor: const Color(0xFFEDE8E6),
       drawer: const CustomDrawer(),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text(
-          'Home',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: Colors.black87,
-          ),
-        ),
+        title: const Text('Home',
+            style:
+                TextStyle(fontWeight: FontWeight.bold, color: Colors.black87)),
         iconTheme: const IconThemeData(color: Colors.black87),
       ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              TextField(
-                decoration: InputDecoration(
-                  hintText: "Search",
-                  prefixIcon: const Icon(Icons.search),
-                  suffixIcon: const Icon(Icons.tune),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
-                  ),
-                  fillColor: Colors.white,
-                  filled: true,
+      body: loading
+          ? const Center(child: CircularProgressIndicator())
+          : SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _searchBox(),
+                    const SizedBox(height: 20),
+                    const Text('Your project',
+                        style: TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 12),
+                    groupsProv.groups.isEmpty
+                        ? const Text('Bạn chưa có nhóm nào')
+                        : ProjectCard(group: groupsProv.groups.first),
+                    const SizedBox(height: 20),
+                    const Text('Your recent tasks',
+                        style: TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 12),
+                    Expanded(
+                      child: tasksProv.tasks.isEmpty
+                          ? const Center(child: Text('Không có task gần đây'))
+                          : ListView.builder(
+                              itemCount: tasksProv.tasks.length,
+                              itemBuilder: (ctx, i) {
+                                final t = tasksProv.tasks[i];
+                                return TaskCard(
+                                  title: t['title'],
+                                  deadline:
+                                      DateTime.tryParse(t['deadline'] ?? ''),
+                                );
+                              },
+                            ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 20),
-              const Text(
-                'Your project',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-              ),
-              const SizedBox(height: 12),
-              ProjectCard(group: currentGroup),
-              const SizedBox(height: 20),
-              const Text(
-                'Your recent tasks',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-              ),
-              const SizedBox(height: 12),
-              // Bọc bằng Expanded để tránh tràn và bị che
-              Expanded(
-                child: ListView.builder(
-                  itemCount: currentTasks.length,
-                  itemBuilder: (context, index) {
-                    final task = currentTasks[index];
-                    return TaskCard(
-                      title: task.title,
-                      deadline: task.deadline,
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+            ),
       floatingActionButton: ElevatedButton.icon(
         onPressed: () {
           showDialog(
             context: context,
-            builder: (context) => const CreateGroupDialog(),
+            builder: (ctx) => const CreateGroupDialog(),
           );
         },
         icon: const Icon(Icons.add, color: Colors.white),
@@ -93,15 +99,29 @@ class HomeScreen extends StatelessWidget {
         style: ElevatedButton.styleFrom(
           backgroundColor: const Color(0xFF7A86F8),
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
-          ),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
           elevation: 6,
         ),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
   }
+
+  /* --- small extract for clarity --- */
+  Widget _searchBox() => TextField(
+        decoration: InputDecoration(
+          hintText: "Search",
+          prefixIcon: const Icon(Icons.search),
+          suffixIcon: const Icon(Icons.tune),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide.none,
+          ),
+          fillColor: Colors.white,
+          filled: true,
+        ),
+      );
 }
 
 class ProjectCard extends StatelessWidget {

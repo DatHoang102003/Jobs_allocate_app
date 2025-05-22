@@ -1,11 +1,8 @@
-// controllers/group.controller.js
 import { pbAdmin } from "../services/pocketbase.js";
 
-// controllers/group.controller.js
 export async function createGroup(req, res) {
   const { name, description } = req.body;
 
-  // Default to true unless explicitly false
   const isPublic = req.body.isPublic === false ? false : true;
 
   const pbUser = req.pbUser;
@@ -15,7 +12,7 @@ export async function createGroup(req, res) {
       name,
       description,
       owner: req.user.id,
-      isPublic, // ← always defined now
+      isPublic,
     });
 
     await pbAdmin.collection("memberships").create({
@@ -35,7 +32,6 @@ export async function listGroups(req, res) {
   const pbUser = req.pbUser;
 
   try {
-    /* 1) memberships + owned groups */
     const mships = await pbUser
       .collection("memberships")
       .getFullList({ filter: `user="${req.user.id}"` });
@@ -49,7 +45,6 @@ export async function listGroups(req, res) {
 
     if (allIds.length === 0) return res.json([]);
 
-    /* 2) Build OR filter instead of ?= */
     const orFilter = allIds.map((id) => `id="${id}"`).join(" || ");
 
     const groups = await pbUser
@@ -72,5 +67,30 @@ export async function listPublicGroups(req, res) {
   } catch (err) {
     console.error("listPublicGroups error:", err.response?.data || err);
     res.status(400).json({ error: err.message });
+  }
+}
+
+export async function getGroupDetails(req, res) {
+  const pbUser = req.pbUser;
+  const groupId = req.params.groupId;
+
+  try {
+    const group = await pbUser.collection("groups").getOne(groupId);
+
+    const members = await pbUser.collection("memberships").getFullList({
+      filter: `group="${groupId}"`,
+      expand: "user",
+      sort: "created",
+    });
+
+    const tasks = await pbUser.collection("tasks").getFullList({
+      filter: `group="${groupId}"`,
+      sort: "-created",
+    });
+
+    res.json({ group, members, tasks });
+  } catch (err) {
+    console.error("getGroupDetails error:", err.response?.data || err);
+    res.status(err?.status || 400).json({ error: err.message });
   }
 }

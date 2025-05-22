@@ -143,4 +143,20 @@ class UserService {
 
     return data;
   }
+
+  static Future<bool> updateName(String newName) async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('auth_token');
+    if (token == null) return false;
+
+    final res = await http.patch(
+      Uri.parse('http://10.0.2.2:3000/me'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({'name': newName}),
+    );
+    return res.statusCode == 200;
+  }
 }

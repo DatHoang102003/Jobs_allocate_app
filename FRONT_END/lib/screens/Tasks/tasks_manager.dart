@@ -1,35 +1,38 @@
-import '../../models/tasks.dart';
+import 'dart:convert';
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
-final mockTasks = [
-  Task(
-    id: 'task1',
-    groupId: 'grp1',
-    title: 'Setup Flutter Project',
-    description:
-        'Initialize flutter project with Firebase and state management',
-    assignUserId: 'john_doe',
-    status: 'in_progress',
-    deadline: DateTime.now().add(const Duration(days: 5)),
-    createdByUserId: 'admin_user',
-  ),
-  Task(
-    id: 'task2',
-    groupId: 'grp1',
-    title: 'Implement Login',
-    description: 'Create login UI and connect with PocketBase API',
-    assignUserId: 'jane_smith',
-    status: 'pending',
-    deadline: DateTime.now().add(const Duration(days: 3)),
-    createdByUserId: 'john_doe',
-  ),
-  Task(
-    id: 'task3',
-    groupId: 'grp2',
-    title: 'Design Task Card UI',
-    description: 'Mockup task card and convert to Flutter widget',
-    assignUserId: 'john_doe',
-    status: 'completed',
-    deadline: null,
-    createdByUserId: 'jane_smith',
-  ),
-];
+class TasksProvider with ChangeNotifier {
+  final List<Map<String, dynamic>> _tasks = [];
+  bool _loading = false;
+
+  List<Map<String, dynamic>> get tasks => List.unmodifiable(_tasks);
+  bool get isLoading => _loading;
+
+  Future<Map<String, String>> _headers() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('auth_token') ?? '';
+    return {'Authorization': 'Bearer $token'};
+  }
+
+  /* fetch last 20 tasks across all groups the user can see */
+  Future<void> fetchRecent() async {
+    _loading = true;
+    notifyListeners();
+
+    try {
+      final res = await http.get(
+        Uri.parse('http://10.0.2.2:3000/tasks/recent?limit=20'),
+        headers: await _headers(),
+      );
+      if (res.statusCode != 200) throw Exception(res.body);
+      _tasks
+        ..clear()
+        ..addAll(jsonDecode(res.body));
+    } finally {
+      _loading = false;
+      notifyListeners();
+    }
+  }
+}

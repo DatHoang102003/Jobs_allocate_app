@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
-import '../../models/tasks.dart';
-import '../Groups/groups_manager.dart';
-import 'tasks_manager.dart';
+import 'package:provider/provider.dart';
+import 'package:task_manager_app/models/groups.dart';
+import 'package:task_manager_app/screens/Groups/groups_manager.dart';
+import 'package:task_manager_app/screens/Tasks/tasks_manager.dart';
+import '../../models/tasks.dart'; // keep your model
 
 class TaskScreen extends StatefulWidget {
   static const routeName = '/task';
-
   const TaskScreen({super.key});
 
   @override
@@ -20,15 +21,35 @@ class _TaskScreenState extends State<TaskScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+
+    // fetch once (if not yet loaded)
+    final tp = context.read<TasksProvider>();
+    if (tp.tasks.isEmpty) tp.fetchRecent();
+
+    final gp = context.read<GroupsProvider>();
+    if (gp.groups.isEmpty) gp.fetchGroups();
   }
 
-  List<Task> _filterTasks(String status) {
-    if (status == 'all') return mockTasks;
-    return mockTasks.where((t) => t.status == status).toList();
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  /* ---------------- filter helpers ---------------- */
+  List<Map<String, dynamic>> _filter(
+      List<Map<String, dynamic>> all, String status) {
+    if (status == 'all') return all;
+    return all.where((t) => t['status'] == status).toList();
   }
 
   @override
   Widget build(BuildContext context) {
+    final tasksProv = context.watch<TasksProvider>();
+    final groupsProv = context.watch<GroupsProvider>();
+
+    final loading = tasksProv.isLoading || groupsProv.isLoading;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF5F6FA),
       appBar: AppBar(
@@ -51,40 +72,63 @@ class _TaskScreenState extends State<TaskScreen>
           ],
         ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _buildTaskList(_filterTasks('all')),
-          _buildTaskList(_filterTasks('in_progress')),
-          _buildTaskList(_filterTasks('completed')),
-        ],
-      ),
+      body: loading
+          ? const Center(child: CircularProgressIndicator())
+          : TabBarView(
+              controller: _tabController,
+              children: [
+                _buildTaskList(_filter(tasksProv.tasks, 'all'), groupsProv),
+                _buildTaskList(
+                    _filter(tasksProv.tasks, 'in_progress'), groupsProv),
+                _buildTaskList(
+                    _filter(tasksProv.tasks, 'completed'), groupsProv),
+              ],
+            ),
     );
   }
 
-  Widget _buildTaskList(List<Task> tasks) {
+  /* ---------- list builder ---------- */
+  Widget _buildTaskList(
+      List<Map<String, dynamic>> tasks, GroupsProvider groupsProv) {
+    if (tasks.isEmpty) {
+      return const Center(child: Text('No tasks'));
+    }
+
     return ListView.builder(
       padding: const EdgeInsets.all(16),
       itemCount: tasks.length,
       itemBuilder: (context, index) {
-        final task = tasks[index];
-        final group = mockGroups.firstWhere(
-          (g) => g.id == task.groupId,
-          orElse: () => mockGroups[0],
+        final t = tasks[index];
+
+        // safely look up the group (never returns null)
+        final groupModel = groupsProv.groups.firstWhere(
+          (gr) => gr.id == t['group'],
+          orElse: () => Group(
+            id: '',
+            name: 'Unknown',
+            description: '',
+            owner: '',
+            created: DateTime.now(),
+            updated: DateTime.now(),
+          ),
         );
+        final groupName = groupModel.name;
 
         return TaskCardUI(
-          title: task.title,
-          description: task.description,
-          groupName: group.name,
-          deadline: task.deadline,
-          status: task.status,
+          title: t['title'],
+          description: t['description'] ?? '',
+          groupName: groupName,
+          deadline: DateTime.tryParse(t['deadline'] ?? ''),
+          status: t['status'],
         );
       },
     );
   }
 }
 
+/* ------------------------------------------------------------------
+   The TaskCardUI widget is identical to your original implementation
+------------------------------------------------------------------- */
 class TaskCardUI extends StatelessWidget {
   final String title;
   final String description;

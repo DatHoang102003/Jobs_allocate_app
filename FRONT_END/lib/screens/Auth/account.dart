@@ -15,6 +15,7 @@ class _AccountScreenState extends State<AccountScreen> {
   Map<String, dynamic>? user;
   bool _isLoading = true;
   bool _uploading = false;
+  bool _savingName = false;
 
   @override
   void initState() {
@@ -30,6 +31,48 @@ class _AccountScreenState extends State<AccountScreen> {
       user = data;
       _isLoading = false;
     });
+  }
+
+  Future<void> _editNameDialog(String current) async {
+    final controller = TextEditingController(text: current);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Change Name'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(labelText: 'New Name'),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Save')),
+        ],
+      ),
+    );
+    if (ok != true) return; // user cancelled
+    final newName = controller.text.trim();
+    if (newName.isEmpty || newName == current) return;
+
+    setState(() => _savingName = true);
+    final success = await UserService.updateName(newName); // <-- service call
+    if (!mounted) return;
+
+    if (success) {
+      await _loadUser(); // refresh profile
+      setState(() => _savingName = false); // Add this line
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Name updated')),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not update name')),
+      );
+      setState(() => _savingName = false);
+    }
   }
 
   Future<void> _pickAndUpload() async {
@@ -65,7 +108,7 @@ class _AccountScreenState extends State<AccountScreen> {
     if (user == null) {
       return Scaffold(
         appBar: AppBar(
-          title: const Text('Tài khoản'),
+          title: const Text('Account'),
           centerTitle: true,
           backgroundColor: _appBarBrown,
           foregroundColor: Colors.white,
@@ -85,7 +128,7 @@ class _AccountScreenState extends State<AccountScreen> {
     return Scaffold(
       backgroundColor: _bgBeige,
       appBar: AppBar(
-        title: const Text('Tài khoản'),
+        title: const Text('Account'),
         centerTitle: true,
         backgroundColor: _appBarBrown,
         foregroundColor: Colors.white,
@@ -159,7 +202,7 @@ class _AccountScreenState extends State<AccountScreen> {
                 children: [
                   const Padding(
                     padding: EdgeInsets.only(left: 4, bottom: 8),
-                    child: Text('Thông tin tài khoản',
+                    child: Text('Account Information',
                         style: TextStyle(
                             fontSize: 18, fontWeight: FontWeight.bold)),
                   ),
@@ -172,9 +215,10 @@ class _AccountScreenState extends State<AccountScreen> {
                       padding: const EdgeInsets.all(16),
                       child: Column(
                         children: [
-                          _infoRow('Tên người dùng', username),
+                          _nameRow(username), // editable name row (unchanged)
                           const Divider(),
-                          _infoRow('Ngày tạo', joined),
+                          _infoRow('Created Date',
+                              joined) // ← was _nameRow(joined) – fixed
                         ],
                       ),
                     ),
@@ -191,8 +235,8 @@ class _AccountScreenState extends State<AccountScreen> {
                         }
                       },
                       icon: const Icon(Icons.logout),
-                      label: const Text('Đăng xuất',
-                          style: TextStyle(fontSize: 16)),
+                      label:
+                          const Text('Logout', style: TextStyle(fontSize: 16)),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: _btnDanger,
                         foregroundColor: Colors.white,
@@ -222,6 +266,23 @@ class _AccountScreenState extends State<AccountScreen> {
                     const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
           ],
         ),
+      );
+
+  Widget _nameRow(String currentName) => ListTile(
+        contentPadding: EdgeInsets.zero,
+        title: const Text('Username',
+            style: TextStyle(fontSize: 16, color: Colors.grey)),
+        subtitle: Text(currentName,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+        trailing: _savingName
+            ? const SizedBox(
+                height: 20,
+                width: 20,
+                child: CircularProgressIndicator(strokeWidth: 2))
+            : IconButton(
+                icon: const Icon(Icons.edit),
+                onPressed: () => _editNameDialog(currentName),
+              ),
       );
 }
 
