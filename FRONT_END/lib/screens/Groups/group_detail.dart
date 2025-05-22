@@ -134,7 +134,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
           const SizedBox(height: 20),
 
           /* ------------ Members ------------ */
-          Text('Thành viên (${members.length})',
+          Text('Member (${members.length})',
               style: const TextStyle(fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
           ...members.map((m) {
