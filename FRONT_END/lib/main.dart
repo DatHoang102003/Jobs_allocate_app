@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:task_manager_app/screens/Auth/account.dart';
 import 'package:task_manager_app/screens/Groups/groups_manager.dart';
 import 'package:task_manager_app/screens/Tasks/tasks_manager.dart';
+import 'package:task_manager_app/screens/home.dart';
 
 import 'package:task_manager_app/services/user_service.dart';
 import 'package:task_manager_app/navigation_manager.dart';
@@ -61,6 +63,9 @@ class MyApp extends StatelessWidget {
           TaskScreen.routeName: (_) => const TaskScreen(),
           GroupScreen.routeName: (_) => const GroupScreen(),
           '/login': (_) => const LoginScreen(),
+          '/home': (_) => const HomeScreen(),
+          '/task': (_) => const TaskScreen(), // left as string
+          '/account': (_) => const AccountScreen(),
         },
       ),
     );

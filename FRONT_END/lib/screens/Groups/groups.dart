@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:task_manager_app/screens/Groups/groups_manager.dart';
-
+import 'package:task_manager_app/screens/home.dart' // ← import your CustomDrawer
+    show
+        CustomDrawer;
 import '../../models/groups.dart';
 import 'edit_dialog.dart';
-import 'group_detail.dart'; // ← already added
+import 'group_detail.dart';
 
 class GroupScreen extends StatefulWidget {
   static const routeName = '/groups';
@@ -22,7 +24,6 @@ class _GroupScreenState extends State<GroupScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
-    // load groups once
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<GroupsProvider>().fetchGroups();
     });
@@ -34,7 +35,6 @@ class _GroupScreenState extends State<GroupScreen>
     super.dispose();
   }
 
-  /* --------- callback from edit dialog -------- */
   void _onGroupEdited(Group updated) =>
       context.read<GroupsProvider>().updateGroup(updated);
 
@@ -43,6 +43,7 @@ class _GroupScreenState extends State<GroupScreen>
     final provider = context.watch<GroupsProvider>();
 
     return Scaffold(
+      drawer: const CustomDrawer(), // ← added drawer here
       appBar: AppBar(
         title: const Text("Groups"),
         actions: [
@@ -59,7 +60,7 @@ class _GroupScreenState extends State<GroupScreen>
                   },
           ),
         ],
-        leading: const BackButton(),
+        automaticallyImplyLeading: true, // ← ensure hamburger shows
         bottom: TabBar(
           controller: _tabController,
           labelColor: Colors.deepPurple,
@@ -88,7 +89,6 @@ class _GroupScreenState extends State<GroupScreen>
     );
   }
 
-  /* ---------------- Overview tab ---------------- */
   Widget _buildOverviewTab(GroupsProvider provider) {
     return ListView.builder(
       padding: const EdgeInsets.all(16.0),
@@ -98,7 +98,7 @@ class _GroupScreenState extends State<GroupScreen>
 
         return GestureDetector(
           onTap: () {
-            provider.setCurrent(group); // keep for edit btn
+            provider.setCurrent(group);
             Navigator.push(
               context,
               MaterialPageRoute(

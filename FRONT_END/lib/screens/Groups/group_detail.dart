@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:task_manager_app/services/group_service.dart';
+import 'package:task_manager_app/services/task_service.dart';
+import 'package:flutter/material.dart';
 
 class GroupDetailScreen extends StatefulWidget {
   final String groupId;
@@ -12,7 +14,8 @@ class GroupDetailScreen extends StatefulWidget {
 
 class _GroupDetailScreenState extends State<GroupDetailScreen> {
   bool _loading = true;
-  bool _saving = false;
+  bool _savingGroup = false;
+  bool _savingTask = false; // ← spinner state for task creation
   Map<String, dynamic>? detail; // {group, members, tasks}
 
   @override
@@ -35,7 +38,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     }
   }
 
-  /* --------------- dialog to edit name/desc ---------------- */
+  /* ─── Edit Group (unchanged) ──────────────────────────────── */
   Future<void> _editGroup() async {
     final g = detail!['group'];
     final nameCtl = TextEditingController(text: g['name']);
@@ -68,7 +71,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     );
     if (ok != true) return;
 
-    setState(() => _saving = true);
+    setState(() => _savingGroup = true);
     try {
       final updated = await GroupService.updateGroup(
         widget.groupId,
@@ -76,15 +79,92 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
         description: descCtl.text.trim(),
       );
       setState(() {
-        detail!['group'] = updated; // refresh local copy
+        detail!['group'] = updated;
       });
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Lỗi: $e')));
-      }
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Lỗi: $e')));
     } finally {
-      if (mounted) setState(() => _saving = false);
+      if (mounted) setState(() => _savingGroup = false);
+    }
+  }
+
+  /* ─── Add Task Dialog ─────────────────────────────────────── */
+  Future<void> _showAddTaskDialog() async {
+    final titleCtl = TextEditingController();
+    final descCtl = TextEditingController();
+    DateTime? pickedDate;
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(builder: (ctx, setInner) {
+          return AlertDialog(
+            title: const Text('Thêm Task'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                    controller: titleCtl,
+                    decoration: const InputDecoration(labelText: 'Tiêu đề')),
+                TextField(
+                    controller: descCtl,
+                    decoration: const InputDecoration(labelText: 'Mô tả')),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(pickedDate == null
+                          ? 'Chọn ngày'
+                          : DateFormat('dd/MM/yyyy').format(pickedDate!)),
+                    ),
+                    TextButton(
+                      onPressed: () async {
+                        final d = await showDatePicker(
+                          context: ctx,
+                          initialDate: DateTime.now(),
+                          firstDate: DateTime(2000),
+                          lastDate: DateTime(2100),
+                        );
+                        if (d != null) setInner(() => pickedDate = d);
+                      },
+                      child: const Text('Chọn'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Hủy')),
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text('Thêm')),
+            ],
+          );
+        });
+      },
+    );
+
+    if (ok != true || titleCtl.text.trim().isEmpty) return;
+
+    setState(() => _savingTask = true);
+    try {
+      await TaskService.createTask(
+        widget.groupId,
+        title: titleCtl.text.trim(),
+        description: descCtl.text.trim(),
+        deadline: pickedDate,
+      );
+      await _fetch(); // reload list of tasks
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Đã thêm task')));
+    } catch (e) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Lỗi khi thêm task: $e')));
+    } finally {
+      if (mounted) setState(() => _savingTask = false);
     }
   }
 
@@ -101,7 +181,6 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     final g = detail!['group'];
     final members = detail!['members'] as List;
     final tasks = detail!['tasks'] as List;
-
     final created =
         DateFormat('dd/MM/yyyy').format(DateTime.parse(g['created']));
 
@@ -110,19 +189,34 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
         title: Text(g['name']),
         actions: [
           IconButton(
-            icon: _saving
+            icon: _savingGroup
                 ? const Padding(
                     padding: EdgeInsets.all(8),
-                    child: CircularProgressIndicator(strokeWidth: 2))
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
                 : const Icon(Icons.edit),
-            onPressed: _saving ? null : _editGroup,
-          )
+            onPressed: _savingGroup ? null : _editGroup,
+          ),
         ],
+      ),
+
+      /* ─── Add Task FAB ───────────────────────────────────── */
+      floatingActionButton: FloatingActionButton.extended(
+        icon: _savingTask
+            ? const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, color: Colors.white),
+              )
+            : const Icon(Icons.add_task),
+        label: const Text('Thêm Task'),
+        onPressed: _savingTask ? null : _showAddTaskDialog,
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          /* ------------ Group info card ------------ */
+          /* Group info */
           Card(
             child: ListTile(
               title: Text(g['name'],
@@ -133,8 +227,8 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
           ),
           const SizedBox(height: 20),
 
-          /* ------------ Members ------------ */
-          Text('Member (${members.length})',
+          /* Members */
+          Text('Members (${members.length})',
               style: const TextStyle(fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
           ...members.map((m) {
@@ -152,15 +246,17 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
           }),
           const SizedBox(height: 20),
 
-          /* ------------ Tasks ------------ */
+          /* Tasks */
           Text('Tasks (${tasks.length})',
               style: const TextStyle(fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
-          ...tasks.map((t) => ListTile(
-                leading: const Icon(Icons.check_circle_outline),
-                title: Text(t['title']),
-                subtitle: Text('Trạng thái: ${t['status']}'),
-              )),
+          ...tasks.map((t) {
+            return ListTile(
+              leading: const Icon(Icons.check_circle_outline),
+              title: Text(t['title']),
+              subtitle: Text('Trạng thái: ${t['status']}'),
+            );
+          }),
         ],
       ),
     );

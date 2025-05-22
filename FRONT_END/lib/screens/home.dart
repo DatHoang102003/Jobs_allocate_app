@@ -263,17 +263,26 @@ class CustomDrawer extends StatelessWidget {
           ListTile(
             leading: const Icon(Icons.home),
             title: const Text('Home'),
-            onTap: () => Navigator.pop(context),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.pushNamed(context, '/home');
+            },
           ),
           ListTile(
             leading: const Icon(Icons.group),
             title: const Text('Groups'),
-            onTap: () => {Navigator.pushNamed(context, '/groups')},
+            onTap: () => {
+              Navigator.pop(context),
+              Navigator.pushNamed(context, '/groups')
+            },
           ),
           ListTile(
             leading: const Icon(Icons.task),
             title: const Text('Tasks'),
-            onTap: () => {Navigator.pushNamed(context, '/task')},
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.pushNamed(context, '/task');
+            },
           ),
           ListTile(
             leading: const Icon(Icons.info),
