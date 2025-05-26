@@ -20,11 +20,12 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    // kick off both loads once
-    final gp = context.read<GroupsProvider>();
-    final tp = context.read<TasksProvider>();
-    if (gp.groups.isEmpty) gp.fetchGroups();
-    if (tp.tasks.isEmpty) tp.fetchRecent();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final gp = context.read<GroupsProvider>();
+      final tp = context.read<TasksProvider>();
+      if (gp.groups.isEmpty) gp.fetchGroups();
+      if (tp.tasks.isEmpty) tp.fetchRecent();
+    });
   }
 
   @override
