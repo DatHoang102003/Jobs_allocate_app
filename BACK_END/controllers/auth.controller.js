@@ -10,6 +10,7 @@ export async function registerUser(req, res) {
       password,
       passwordConfirm: password,
       name,
+      emailVisibility: true,
     });
     return res.status(201).json(user);
   } catch (err) {

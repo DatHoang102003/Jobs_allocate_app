@@ -2,15 +2,18 @@ import PocketBase from "pocketbase";
 import multer from "multer";
 import { pbAdmin } from "../services/pocketbase.js";
 
-
 export const upload = multer({ storage: multer.memoryStorage() });
 
 /* ───────────────── GET /me ───────────────── */
 export async function getMyProfile(req, res) {
   try {
-    res.json(req.user);
+    const pbUser = req.pbUser;
+    const userId = req.user.id;
+    // Fetch the full record (includes avatar)
+    const userFull = await pbUser.collection("users").getOne(userId);
+    return res.json(userFull);
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    return res.status(400).json({ error: err.message });
   }
 }
 
@@ -61,5 +64,3 @@ export async function getAllUsers(req, res) {
     res.status(400).json({ error: err.message });
   }
 }
-
-

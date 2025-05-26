@@ -31,23 +31,37 @@ class GroupService {
      Get a single group's full detail (group + members + tasks)
   ------------------------------------------------- */
   static Future<Map<String, dynamic>> getGroupDetail(String id) async {
-    final res = await http.get(Uri.parse('$_base/groups/$id'),
-        headers: await _headers());
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('auth_token') ?? '';
+
+    final res = await http.get(
+      Uri.parse('$_base/groups/$id'),
+      headers: await _headers(),
+    );
     if (res.statusCode != 200) throw Exception(res.body);
 
     final data = jsonDecode(res.body) as Map<String, dynamic>;
 
-    // Build avatarUrl for each member so UI can use it directly
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('auth_token') ?? '';
-    for (final m in data['members'] as List) {
-      final u = m['expand']['user'];
-      final file = u['avatar'];
-      if (file != null && file != '') {
-        u['avatarUrl'] =
-            'http://10.0.2.2:8090/api/files/_pb_users_auth_/${u['id']}/$file?token=$token';
+    // ── Build avatarUrl for each member ──
+    final members = data['members'] as List<dynamic>?;
+    if (members != null) {
+      for (final m in members) {
+        // Safely grab expand/user
+        final expand = m['expand'] as Map<String, dynamic>?;
+        final u = expand?['user'] as Map<String, dynamic>?;
+
+        if (u != null) {
+          final fileId = u['avatar'] as String?;
+          if (fileId != null && fileId.isNotEmpty) {
+            u['avatarUrl'] = 'http://10.0.2.2:8090/api/files/_pb_users_auth_/'
+                '${u['id']}/$fileId?token=$token';
+          } else {
+            u['avatarUrl'] = null;
+          }
+        }
       }
     }
+
     return data;
   }
 

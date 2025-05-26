@@ -189,10 +189,21 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     }
 
     final g = detail!['group'];
-    final members = detail!['members'] as List;
     final tasks = detail!['tasks'] as List;
     final created =
         DateFormat('dd/MM/yyyy').format(DateTime.parse(g['created']));
+    final allMembers = detail!['members'] as List<dynamic>;
+    final admins = allMembers.where((m) {
+      final role = m['role'] as String? ?? 'member';
+      final u = (m['expand'] as Map?)?['user'] as Map<String, dynamic>?;
+      return role == 'admin' || (u?['id'] == g['owner']);
+    }).toList();
+
+    final members = allMembers.where((m) {
+      final role = m['role'] as String? ?? 'member';
+      final u = (m['expand'] as Map?)?['user'] as Map<String, dynamic>?;
+      return !(role == 'admin' || (u?['id'] == g['owner']));
+    }).toList();
 
     return Scaffold(
       appBar: AppBar(
@@ -210,7 +221,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
         ],
       ),
 
-      /* ─── Add Task FAB ───────────────────────────────────── */
+      /* ─── Add-Task FAB ───────────────────────────────────────── */
       floatingActionButton: FloatingActionButton.extended(
         icon: _savingTask
             ? const SizedBox(
@@ -223,10 +234,12 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
         label: const Text('Thêm Task'),
         onPressed: _savingTask ? null : _showAddTaskDialog,
       ),
+
+      /* ─── Main body ─────────────────────────────────────────── */
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          /* Group info */
+          /* Group info card */
           Card(
             child: ListTile(
               title: Text(g['name'],
@@ -237,39 +250,49 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
           ),
           const SizedBox(height: 20),
 
+          /* Admins */
+          if (admins.isNotEmpty) ...[
+            Text('Admins (${admins.length})',
+                style: const TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            ...admins.map(_memberTile),
+            const SizedBox(height: 20),
+          ],
+
           /* Members */
           Text('Members (${members.length})',
               style: const TextStyle(fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
-          ...members.map((m) {
-            final u = m['expand']?['user'];
-            if (u == null) return const SizedBox();
-            return ListTile(
-              leading: CircleAvatar(
-                backgroundImage: u['avatarUrl'] != null
-                    ? NetworkImage(u['avatarUrl'])
-                    : null,
-                child: u['avatarUrl'] == null ? const Icon(Icons.person) : null,
-              ),
-              title: Text(u['name'] ?? ''),
-              subtitle: Text(m['role']),
-            );
-          }),
+          ...members.map(_memberTile),
           const SizedBox(height: 20),
 
           /* Tasks */
           Text('Tasks (${tasks.length})',
               style: const TextStyle(fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
-          ...tasks.map((t) {
-            return ListTile(
-              leading: const Icon(Icons.check_circle_outline),
-              title: Text(t['title']),
-              subtitle: Text('Trạng thái: ${t['status']}'),
-            );
-          }),
+          ...tasks.map((t) => ListTile(
+                leading: const Icon(Icons.check_circle_outline),
+                title: Text(t['title']),
+                subtitle: Text('Trạng thái: ${t['status']}'),
+              )),
         ],
       ),
+    );
+  }
+
+  /* ─── Renders one member row ───────────────────────────── */
+  Widget _memberTile(dynamic m) {
+    final expanded = m['expand'] as Map<String, dynamic>?;
+    final u = expanded?['user'] as Map<String, dynamic>?;
+    final avatarUrl = u?['avatarUrl'] as String?;
+
+    return ListTile(
+      leading: CircleAvatar(
+        backgroundImage: avatarUrl != null ? NetworkImage(avatarUrl) : null,
+        child: avatarUrl == null ? const Icon(Icons.person) : null,
+      ),
+      title: Text(u?['name'] ?? 'Unknown'),
+      subtitle: Text(u?['email'] ?? ''),
     );
   }
 }
