@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import '../../services/group_service.dart';
+import '../../services/invite_service.dart';
+import '../../services/user_service.dart';
 
 class CreateGroupDialog extends StatefulWidget {
   const CreateGroupDialog({super.key});
@@ -10,7 +13,64 @@ class CreateGroupDialog extends StatefulWidget {
 class _CreateGroupDialogState extends State<CreateGroupDialog> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _descController = TextEditingController();
-  final List<String> members = [];
+  final Set<String> selectedMemberIds = {};
+  List<dynamic> allUsers = [];
+
+  bool _isCreating = false;
+  bool _isLoadingUsers = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUsers();
+  }
+
+  Future<void> _loadUsers() async {
+    setState(() => _isLoadingUsers = true);
+    try {
+      final users = await UserService.getAllUsers();
+      setState(() => allUsers = users);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Failed to load users: $e")),
+      );
+    } finally {
+      setState(() => _isLoadingUsers = false);
+    }
+  }
+
+  void _openUserSelector() {
+    showModalBottomSheet(
+      context: context,
+      builder: (_) => ListView(
+        children: allUsers.map((user) {
+          final id = user['id'];
+          final name = user['name'];
+          final isSelected = selectedMemberIds.contains(id);
+
+          return ListTile(
+            leading: CircleAvatar(
+              backgroundImage:
+                  user['avatar'] != null ? NetworkImage(user['avatar']) : null,
+              child: user['avatar'] == null ? Text(name[0]) : null,
+            ),
+            title: Text(name),
+            trailing: isSelected ? const Icon(Icons.check) : null,
+            onTap: () {
+              setState(() {
+                if (isSelected) {
+                  selectedMemberIds.remove(id);
+                } else {
+                  selectedMemberIds.add(id);
+                }
+              });
+              Navigator.pop(context);
+            },
+          );
+        }).toList(),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -26,10 +86,7 @@ class _CreateGroupDialogState extends State<CreateGroupDialog> {
                 const Expanded(
                   child: Text(
                     "Create group",
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                 ),
                 IconButton(
@@ -60,7 +117,7 @@ class _CreateGroupDialogState extends State<CreateGroupDialog> {
               maxLines: 3,
             ),
             const SizedBox(height: 16),
-            const Text("Add member",
+            const Text("Members",
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
             const SizedBox(height: 8),
             SizedBox(
@@ -68,18 +125,29 @@ class _CreateGroupDialogState extends State<CreateGroupDialog> {
               child: ListView(
                 scrollDirection: Axis.horizontal,
                 children: [
-                  for (var avatar in members)
+                  for (var id in selectedMemberIds)
                     Padding(
                       padding: const EdgeInsets.only(right: 8),
                       child: CircleAvatar(
                         radius: 25,
-                        backgroundImage: AssetImage(avatar),
+                        backgroundImage: allUsers.firstWhere(
+                                    (u) => u['id'] == id)['avatar'] !=
+                                null
+                            ? NetworkImage(allUsers
+                                .firstWhere((u) => u['id'] == id)['avatar'])
+                            : null,
+                        child: allUsers.firstWhere(
+                                    (u) => u['id'] == id)['avatar'] ==
+                                null
+                            ? Text(
+                                allUsers.firstWhere(
+                                    (u) => u['id'] == id)['name'][0],
+                              )
+                            : null,
                       ),
                     ),
                   GestureDetector(
-                    onTap: () {
-                      // TODO: Mở modal chọn user
-                    },
+                    onTap: _isLoadingUsers ? null : _openUserSelector,
                     child: Container(
                       width: 50,
                       height: 50,
@@ -87,7 +155,12 @@ class _CreateGroupDialogState extends State<CreateGroupDialog> {
                         border: Border.all(color: Colors.deepPurple),
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: const Icon(Icons.add, color: Colors.deepPurple),
+                      child: _isLoadingUsers
+                          ? const Padding(
+                              padding: EdgeInsets.all(8),
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.add, color: Colors.deepPurple),
                     ),
                   )
                 ],
@@ -95,11 +168,71 @@ class _CreateGroupDialogState extends State<CreateGroupDialog> {
             ),
             const SizedBox(height: 12),
             ElevatedButton.icon(
-              onPressed: () {
-                // TODO: xử lý lưu nhóm mới
-                Navigator.pop(context); // Đóng dialog
-              },
-              icon: const Icon(Icons.arrow_forward, color: Colors.white),
+              onPressed: _isCreating
+                  ? null
+                  : () async {
+                      final name = _nameController.text.trim();
+                      final desc = _descController.text.trim();
+
+                      if (name.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                              content: Text("Group name cannot be empty")),
+                        );
+                        return;
+                      }
+
+                      setState(() => _isCreating = true);
+
+                      try {
+                        final response = await GroupService.createGroup(
+                          name: name,
+                          description: desc,
+                          isPublic: true,
+                        );
+
+                        final groupId = response['group']['id'];
+
+                        // Gửi lời mời cho các thành viên đã chọn
+                        for (final userId in selectedMemberIds) {
+                          print(
+                              'Inviting user $userId to group $groupId'); // ✅ debug
+
+                          try {
+                            await InviteService.sendInviteRequest(
+                                groupId, userId);
+                          } catch (e) {
+                            debugPrint("Failed to invite $userId: $e");
+                          }
+                        }
+
+                        if (!context.mounted) return;
+                        Navigator.pop(context);
+
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                                "Group '${response['name']}' created successfully"),
+                          ),
+                        );
+                      } catch (e) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                              content: Text(
+                                  "Failed to create group: ${e.toString()}")),
+                        );
+                      } finally {
+                        if (mounted) setState(() => _isCreating = false);
+                      }
+                    },
+              icon: _isCreating
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                          color: Colors.white, strokeWidth: 2),
+                    )
+                  : const Icon(Icons.arrow_forward, color: Colors.white),
               label: const Text(
                 "Create",
                 style: TextStyle(color: Colors.white),

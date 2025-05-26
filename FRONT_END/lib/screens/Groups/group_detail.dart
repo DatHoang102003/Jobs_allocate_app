@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:task_manager_app/services/group_service.dart';
+import 'package:task_manager_app/services/membership_service.dart';
 import 'package:task_manager_app/services/task_service.dart';
-import 'package:flutter/material.dart';
 
 class GroupDetailScreen extends StatefulWidget {
   final String groupId;
@@ -15,7 +15,7 @@ class GroupDetailScreen extends StatefulWidget {
 class _GroupDetailScreenState extends State<GroupDetailScreen> {
   bool _loading = true;
   bool _savingGroup = false;
-  bool _savingTask = false; // ← spinner state for task creation
+  bool _savingTask = false;
   Map<String, dynamic>? detail; // {group, members, tasks}
 
   @override
@@ -26,8 +26,18 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
 
   Future<void> _fetch() async {
     try {
-      final d = await GroupService.getGroupDetail(widget.groupId);
-      if (mounted) setState(() => detail = d);
+      final groupDetail = await GroupService.getGroupDetail(widget.groupId);
+      final members =
+          await MembershipService.listMembersOfGroup(widget.groupId);
+      if (mounted) {
+        setState(() {
+          detail = {
+            'group': groupDetail['group'],
+            'members': members,
+            'tasks': groupDetail['tasks'] ?? [],
+          };
+        });
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context)
@@ -232,7 +242,8 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
               style: const TextStyle(fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
           ...members.map((m) {
-            final u = m['expand']['user'];
+            final u = m['expand']?['user'];
+            if (u == null) return const SizedBox();
             return ListTile(
               leading: CircleAvatar(
                 backgroundImage: u['avatarUrl'] != null

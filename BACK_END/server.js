@@ -6,6 +6,7 @@ import authRoutes from "./routes/auth.routes.js";
 import groupRoutes from "./routes/group.routes.js";
 import { requireAuth } from "./middleware/auth.middleware.js";
 import joinRoutes from "./routes/join.routes.js";
+import inviteRoutes from "./routes/invite.routes.js";
 import taskRoutes from "./routes/task.routes.js";
 import membershipRoutes from "./routes/membership.routes.js";
 import userRoutes from "./routes/user.routes.js";
@@ -23,6 +24,7 @@ app.use("/", joinRoutes);
 app.use("/", taskRoutes);
 app.use("/", membershipRoutes);
 app.use("/", userRoutes);
+app.use("/", inviteRoutes);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {

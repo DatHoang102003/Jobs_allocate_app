@@ -63,4 +63,32 @@ class GroupService {
     if (res.statusCode != 200) throw Exception(res.body);
     return jsonDecode(res.body);
   }
+
+  /* -------------------------------------------------
+   Create a new group
+------------------------------------------------- */
+  static Future<Map<String, dynamic>> createGroup({
+    required String name,
+    String description = '',
+    bool isPublic = true,
+  }) async {
+    final body = jsonEncode({
+      'name': name,
+      'description': description,
+      'isPublic': isPublic,
+    });
+
+    final res = await http.post(
+      Uri.parse('$_base/groups'),
+      headers: await _headers(),
+      body: body,
+    );
+
+    if (res.statusCode != 201) throw Exception(res.body);
+
+    final data = jsonDecode(res.body);
+    print("✅ Created group: $data");
+
+    return data;
+  }
 }

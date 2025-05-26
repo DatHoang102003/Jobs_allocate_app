@@ -1,32 +1,71 @@
 import { pbAdmin } from "../services/pocketbase.js";
 
 export async function createGroup(req, res) {
-  const { name, description } = req.body;
-
+  const { name, description, members = [] } = req.body;
   const isPublic = req.body.isPublic === false ? false : true;
 
   const pbUser = req.pbUser;
+  const creatorId = req.user.id;
+
+  if (!pbUser) {
+    return res.status(500).json({ error: "PocketBase user instance is not available" });
+  }
 
   try {
+    // Tạo nhóm
     const group = await pbUser.collection("groups").create({
       name,
       description,
-      owner: req.user.id,
+      owner: creatorId,
       isPublic,
     });
 
-    await pbAdmin.collection("memberships").create({
-      user: req.user.id,
+    // Thêm creator vào memberships với vai trò admin
+    await pbUser.collection("memberships").create({
+      user: creatorId,
       group: group.id,
       role: "admin",
     });
 
-    return res.status(201).json(group);
+    // Thêm các thành viên khác (nếu có)
+    const uniqueMemberIds = [...new Set(members)].filter((id) => id !== creatorId);
+
+    for (const userId of uniqueMemberIds) {
+      // Kiểm tra người dùng tồn tại
+      await pbUser.collection("users").getOne(userId); // sẽ throw nếu không hợp lệ
+      await pbUser.collection("memberships").create({
+        user: userId,
+        group: group.id,
+        role: "member",
+      });
+    }
+
+    // Lấy danh sách thành viên (gồm cả thông tin mở rộng của user)
+    const groupMembers = await pbUser.collection("memberships").getFullList({
+      filter: `group="${group.id}"`,
+      expand: "user",
+    });
+
+    // Trả về group cùng với danh sách thành viên
+    return res.status(201).json({
+      group,
+      members: groupMembers.map(member => ({
+        id: member.id,
+        userId: member.user,
+        role: member.role,
+        user: member.expand?.user || null
+      }))
+    });
+
   } catch (err) {
     console.error("createGroup error:", err.response?.data || err);
-    return res.status(400).json({ error: err.message });
+    return res.status(400).json({
+      error: err?.response?.data?.message || err.message || "Unknown error"
+    });
   }
 }
+
+
 
 export async function listGroups(req, res) {
   const pbUser = req.pbUser;

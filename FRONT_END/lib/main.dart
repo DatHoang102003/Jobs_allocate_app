@@ -64,7 +64,6 @@ class MyApp extends StatelessWidget {
           GroupScreen.routeName: (_) => const GroupScreen(),
           '/login': (_) => const LoginScreen(),
           '/home': (_) => const HomeScreen(),
-          '/task': (_) => const TaskScreen(), // left as string
           '/account': (_) => const AccountScreen(),
         },
       ),

@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import 'package:task_manager_app/models/groups.dart';
 import 'package:task_manager_app/screens/Groups/groups_manager.dart';
 import 'package:task_manager_app/screens/Tasks/tasks_manager.dart';
-import '../../models/tasks.dart'; // keep your model
 
 class TaskScreen extends StatefulWidget {
   static const routeName = '/task';

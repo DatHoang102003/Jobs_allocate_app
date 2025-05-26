@@ -1,6 +1,9 @@
 // routes/user.routes.js
 import express from "express";
 import { requireAuth } from "../middleware/auth.middleware.js";
+import { getAllUsers } from "../controllers/user.controller.js";
+
+
 import {
   getMyProfile,
   updateMyProfile,
@@ -52,9 +55,27 @@ const router = express.Router();
  *       400: { description: Validation or upload error }
  *       401: { description: Unauthorized }
  */
+/**
+ * @swagger
+ * /users:
+ *   get:
+ *     summary: Get all users (for selection, admin only)
+ *     tags: [User]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Returns list of all users
+ *       401:
+ *         description: Unauthorized
+ */
+
 /*──────────────── Routes ──────────────────────────────────*/
 router.get("/me", requireAuth, getMyProfile);
 
 router.patch("/me", requireAuth, upload.single("avatar"), updateMyProfile);
+
+router.get("/users", requireAuth, getAllUsers);
+
 
 export default router;

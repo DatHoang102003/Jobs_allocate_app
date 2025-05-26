@@ -159,4 +159,25 @@ class UserService {
     );
     return res.statusCode == 200;
   }
+
+  /* -------------------------------------------------
+   Get list of users
+------------------------------------------------- */
+  static Future<List<dynamic>> getAllUsers() async {
+    final res = await http.get(
+      Uri.parse('$_baseUrl/users'),
+      headers: await _headers(),
+    );
+    if (res.statusCode != 200) throw Exception(res.body);
+    return jsonDecode(res.body);
+  }
+
+  static Future<Map<String, String>> _headers() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('auth_token') ?? '';
+    return {
+      'Authorization': 'Bearer $token',
+      'Content-Type': 'application/json',
+    };
+  }
 }

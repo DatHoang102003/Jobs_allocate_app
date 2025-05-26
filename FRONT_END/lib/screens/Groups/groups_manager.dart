@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:task_manager_app/models/groups.dart';
-import 'package:task_manager_app/services/group_service.dart';
 
+import '../../models/groups.dart';
+import '../../services/group_service.dart';
 
 class GroupsProvider with ChangeNotifier {
   final List<Group> _groups = [];
@@ -18,10 +18,10 @@ class GroupsProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      final raw = await GroupService.getGroups();          // REST → List<Map>
+      final raw = await GroupService.getGroups(); // REST → List<Map>
       _groups
         ..clear()
-        ..addAll(raw.map((e) => Group.fromJson(e)));       // convert to model
+        ..addAll(raw.map((e) => Group.fromJson(e))); // convert to model
       _current ??= _groups.isNotEmpty ? _groups.first : null;
     } catch (e) {
       debugPrint('fetchGroups error: $e');
