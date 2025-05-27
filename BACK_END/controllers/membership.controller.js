@@ -73,15 +73,48 @@ export async function leaveGroup(req, res) {
 export async function removeMember(req, res) {
   const pbUser = req.pbUser;
   const { groupId, membershipId } = req.params;
-  try {
-    const group = await pbUser.collection("groups").getOne(groupId);
-    if (group.owner !== req.user.id)
-      return res.status(403).json({ error: "Only owner can remove members" });
 
+  try {
+    // 1) Fetch the group
+    const group = await pbUser.collection("groups").getOne(groupId);
+
+    // 2) Fetch caller's membership in this group
+    const callerMs = await pbUser
+      .collection("memberships")
+      .getFirstListItem(`group="${groupId}" && user="${req.user.id}"`);
+
+    const isOwner = group.owner === req.user.id;
+    const isAdmin = callerMs?.role === "admin";
+
+    if (!isOwner && !isAdmin) {
+      return res
+        .status(403)
+        .json({ error: "Only owner or admins can remove members" });
+    }
+
+    // 3) Fetch the *target* membership
+    const targetMs = await pbUser
+      .collection("memberships")
+      .getOne(membershipId);
+
+    // 4) Protect the owner
+    if (targetMs.user === group.owner) {
+      return res.status(403).json({ error: "Cannot remove the group owner" });
+    }
+
+    // 5) Prevent admins from removing other admins
+    if (targetMs.role === "admin" && !isOwner) {
+      return res
+        .status(403)
+        .json({ error: "Only the owner can remove another admin" });
+    }
+
+    // 6) All checks passed → delete
     await pbAdmin.collection("memberships").delete(membershipId);
-    res.json({ ok: true });
+    return res.json({ ok: true });
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    console.error("removeMember error:", err.response?.data || err);
+    return res.status(400).json({ error: err.message });
   }
 }
 
