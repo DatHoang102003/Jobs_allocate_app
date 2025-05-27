@@ -60,10 +60,6 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 20),
               SizedBox(
                 height: 160,
-                // child: Image.asset(
-                //   'assets/login_illustration.png',
-                //   fit: BoxFit.contain,
-                // ),
                 child:
                     Icon(Icons.account_circle, size: 150, color: Colors.black),
               ),

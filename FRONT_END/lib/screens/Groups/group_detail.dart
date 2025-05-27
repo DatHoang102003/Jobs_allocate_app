@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:task_manager_app/screens/Tasks/create_task.dart';
 import 'package:task_manager_app/services/group_service.dart';
 import 'package:task_manager_app/services/membership_service.dart';
 import 'package:task_manager_app/services/task_service.dart';
+import 'package:task_manager_app/services/auth_service.dart';           // NEW
 
 class GroupDetailScreen extends StatefulWidget {
   final String groupId;
@@ -15,9 +17,9 @@ class GroupDetailScreen extends StatefulWidget {
 class _GroupDetailScreenState extends State<GroupDetailScreen> {
   bool _loading = true;
   bool _savingGroup = false;
-  bool _savingTask = false;
   Map<String, dynamic>? detail; // {group, members, tasks}
 
+  /* ───────────────── fetch all data ───────────────── */
   @override
   void initState() {
     super.initState();
@@ -29,26 +31,25 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
       final groupDetail = await GroupService.getGroupDetail(widget.groupId);
       final members =
           await MembershipService.listMembersOfGroup(widget.groupId);
-      if (mounted) {
-        setState(() {
-          detail = {
-            'group': groupDetail['group'],
-            'members': members,
-            'tasks': groupDetail['tasks'] ?? [],
-          };
-        });
-      }
+
+      setState(() {
+        detail = {
+          'group': groupDetail['group'],
+          'members': members,
+          'tasks': groupDetail['tasks'] ?? [],
+        };
+        _loading = false;
+      });
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+        setState(() => _loading = false);
       }
-    } finally {
-      if (mounted) setState(() => _loading = false);
     }
   }
 
-  /* ─── Edit Group (unchanged) ──────────────────────────────── */
+  /* ───────────────── edit group info ───────────────── */
   Future<void> _editGroup() async {
     final g = detail!['group'];
     final nameCtl = TextEditingController(text: g['name']);
@@ -88,9 +89,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
         name: nameCtl.text.trim(),
         description: descCtl.text.trim(),
       );
-      setState(() {
-        detail!['group'] = updated;
-      });
+      setState(() => detail!['group'] = updated);
     } catch (e) {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text('Lỗi: $e')));
@@ -99,85 +98,18 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     }
   }
 
-  /* ─── Add Task Dialog ─────────────────────────────────────── */
-  Future<void> _showAddTaskDialog() async {
-    final titleCtl = TextEditingController();
-    final descCtl = TextEditingController();
-    DateTime? pickedDate;
-
-    final ok = await showDialog<bool>(
+  /* ───────────────── add task (new dialog) ───────────────── */
+  Future<void> _openCreateTaskDialog() async {
+    final created = await showDialog<bool>(
       context: context,
-      builder: (ctx) {
-        return StatefulBuilder(builder: (ctx, setInner) {
-          return AlertDialog(
-            title: const Text('Thêm Task'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                    controller: titleCtl,
-                    decoration: const InputDecoration(labelText: 'Tiêu đề')),
-                TextField(
-                    controller: descCtl,
-                    decoration: const InputDecoration(labelText: 'Mô tả')),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(pickedDate == null
-                          ? 'Chọn ngày'
-                          : DateFormat('dd/MM/yyyy').format(pickedDate!)),
-                    ),
-                    TextButton(
-                      onPressed: () async {
-                        final d = await showDatePicker(
-                          context: ctx,
-                          initialDate: DateTime.now(),
-                          firstDate: DateTime(2000),
-                          lastDate: DateTime(2100),
-                        );
-                        if (d != null) setInner(() => pickedDate = d);
-                      },
-                      child: const Text('Chọn'),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                  onPressed: () => Navigator.pop(ctx, false),
-                  child: const Text('Hủy')),
-              TextButton(
-                  onPressed: () => Navigator.pop(ctx, true),
-                  child: const Text('Thêm')),
-            ],
-          );
-        });
-      },
+      builder: (_) => Dialog(
+        child: CreateTaskScreen(groupId: widget.groupId),
+      ),
     );
-
-    if (ok != true || titleCtl.text.trim().isEmpty) return;
-
-    setState(() => _savingTask = true);
-    try {
-      await TaskService.createTask(
-        widget.groupId,
-        title: titleCtl.text.trim(),
-        description: descCtl.text.trim(),
-        deadline: pickedDate,
-      );
-      await _fetch(); // reload list of tasks
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Đã thêm task')));
-    } catch (e) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Lỗi khi thêm task: $e')));
-    } finally {
-      if (mounted) setState(() => _savingTask = false);
-    }
+    if (created == true) await _fetch();
   }
 
+  /* ───────────────── build ───────────────── */
   @override
   Widget build(BuildContext context) {
     if (_loading) {
@@ -193,17 +125,21 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     final created =
         DateFormat('dd/MM/yyyy').format(DateTime.parse(g['created']));
     final allMembers = detail!['members'] as List<dynamic>;
+
+    /* current-user permissions */
+    final meId = AuthService.currentUserId;                   // adjust to your auth
+    final myMs = allMembers
+        .cast<Map<String, dynamic>>()
+        .firstWhere((m) => m['user'] == meId, orElse: () => {});
+    final bool isOwner = g['owner'] == meId;
+    final bool isAdmin = isOwner || myMs['role'] == 'admin';
+
     final admins = allMembers.where((m) {
       final role = m['role'] as String? ?? 'member';
-      final u = (m['expand'] as Map?)?['user'] as Map<String, dynamic>?;
-      return role == 'admin' || (u?['id'] == g['owner']);
+      return role == 'admin' || m['user'] == g['owner'];
     }).toList();
 
-    final members = allMembers.where((m) {
-      final role = m['role'] as String? ?? 'member';
-      final u = (m['expand'] as Map?)?['user'] as Map<String, dynamic>?;
-      return !(role == 'admin' || (u?['id'] == g['owner']));
-    }).toList();
+    final members = allMembers.where((m) => !admins.contains(m)).toList();
 
     return Scaffold(
       appBar: AppBar(
@@ -221,25 +157,16 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
         ],
       ),
 
-      /* ─── Add-Task FAB ───────────────────────────────────────── */
-      floatingActionButton: FloatingActionButton.extended(
-        icon: _savingTask
-            ? const SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(
-                    strokeWidth: 2, color: Colors.white),
-              )
-            : const Icon(Icons.add_task),
-        label: const Text('Thêm Task'),
-        onPressed: _savingTask ? null : _showAddTaskDialog,
+      /* add-task FAB */
+      floatingActionButton: FloatingActionButton(
+        onPressed: _openCreateTaskDialog,
+        child: const Icon(Icons.add),
       ),
 
-      /* ─── Main body ─────────────────────────────────────────── */
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          /* Group info card */
+          /* group info */
           Card(
             child: ListTile(
               title: Text(g['name'],
@@ -250,23 +177,23 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
           ),
           const SizedBox(height: 20),
 
-          /* Admins */
+          /* admins */
           if (admins.isNotEmpty) ...[
             Text('Admins (${admins.length})',
                 style: const TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
-            ...admins.map(_memberTile),
+            ...admins.map((m) => _memberTile(m, isAdmin)),
             const SizedBox(height: 20),
           ],
 
-          /* Members */
+          /* members */
           Text('Members (${members.length})',
               style: const TextStyle(fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
-          ...members.map(_memberTile),
+          ...members.map((m) => _memberTile(m, isAdmin)),
           const SizedBox(height: 20),
 
-          /* Tasks */
+          /* tasks */
           Text('Tasks (${tasks.length})',
               style: const TextStyle(fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
@@ -280,19 +207,47 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     );
   }
 
-  /* ─── Renders one member row ───────────────────────────── */
-  Widget _memberTile(dynamic m) {
-    final expanded = m['expand'] as Map<String, dynamic>?;
-    final u = expanded?['user'] as Map<String, dynamic>?;
-    final avatarUrl = u?['avatarUrl'] as String?;
+  /* ───────────────── member row ───────────────── */
+  Widget _memberTile(dynamic m, bool canRemove) {
+    final u = (m['expand'] as Map)['user'] as Map<String, dynamic>;
+    final avatarUrl = u['avatarUrl'] as String?;
 
     return ListTile(
       leading: CircleAvatar(
         backgroundImage: avatarUrl != null ? NetworkImage(avatarUrl) : null,
         child: avatarUrl == null ? const Icon(Icons.person) : null,
       ),
-      title: Text(u?['name'] ?? 'Unknown'),
-      subtitle: Text(u?['email'] ?? ''),
+      title: Text(u['name'] ?? 'Unknown'),
+      subtitle: Text(u['email'] ?? ''),
+      trailing: canRemove && u['id'] != AuthService.currentUserId
+          ? IconButton(
+              icon: const Icon(Icons.remove_circle, color: Colors.red),
+              onPressed: () async {
+                final ok = await showDialog<bool>(
+                  context: context,
+                  builder: (_) => AlertDialog(
+                    title: const Text('Remove member?'),
+                    content: Text('Xóa ${u['name'] ?? u['email']} khỏi nhóm?'),
+                    actions: [
+                      TextButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          child: const Text('Hủy')),
+                      TextButton(
+                          onPressed: () => Navigator.pop(context, true),
+                          child: const Text('Xóa')),
+                    ],
+                  ),
+                );
+                if (ok != true) return;
+
+                await MembershipService.removeMember(
+                  widget.groupId,
+                  m['id'] as String,
+                );
+                await _fetch();
+              },
+            )
+          : null,
     );
   }
 }
