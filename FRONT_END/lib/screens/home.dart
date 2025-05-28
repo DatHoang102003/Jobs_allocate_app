@@ -153,12 +153,6 @@ class ProjectCard extends StatelessWidget {
                   style: const TextStyle(fontSize: 12, color: Colors.grey),
                 ),
                 const Spacer(),
-                const Icon(Icons.update, size: 16, color: Colors.grey),
-                const SizedBox(width: 4),
-                Text(
-                  "Updated: ${group.updated.toLocal().toString().split(' ')[0]}",
-                  style: const TextStyle(fontSize: 12, color: Colors.grey),
-                ),
               ],
             ),
             const SizedBox(height: 12),

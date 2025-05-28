@@ -6,6 +6,7 @@ import {
   leaveGroup,
   removeMember,
   updateMemberRole,
+  searchMembersInGroup,
 } from "../controllers/membership.controller.js";
 
 const router = express.Router();
@@ -66,6 +67,36 @@ const router = express.Router();
  *       200:
  *         description: Left group
  */
+
+/**
+ * @swagger
+ * /groups/{groupId}/members/search:
+ *   get:
+ *     summary: Search members in a group by name or email
+ *     tags: [Memberships]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: groupId
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: query
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Name or email to search
+ *     responses:
+ *       200:
+ *         description: Matching group members
+ *       400:
+ *         description: Missing or invalid query
+ *       403:
+ *         description: Forbidden
+ */
+
 
 /**
  * @swagger
@@ -133,14 +164,17 @@ router.get("/groups/:groupId/members", requireAuth, listMembersOfGroup);
 // 3) Leave a group (delete my own membership)
 router.delete("/memberships/:membershipId", requireAuth, leaveGroup);
 
-// 4) Owner kicks a member
+// 4) Search members in a group
+router.get("/groups/:groupId/members/search", requireAuth, searchMembersInGroup); 
+
+// 5) Owner kicks a member
 router.delete(
   "/groups/:groupId/members/:membershipId",
   requireAuth,
   removeMember
 );
 
-// 5) Owner changes a member's role
+// 6) Owner changes a member's role
 router.patch("/memberships/:membershipId/role", requireAuth, updateMemberRole);
 
 export default router;
