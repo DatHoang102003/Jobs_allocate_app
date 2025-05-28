@@ -108,3 +108,45 @@ export async function updateMemberRole(req, res) {
     res.status(400).json({ error: err.message });
   }
 }
+/* 6. Search members in a specific group */
+export async function searchMembersInGroup(req, res) {
+  const pbUser = req.pbUser;
+  const { groupId } = req.params;
+  const { query } = req.query; // text to search for
+
+  if (!query) {
+    return res.status(400).json({ error: "Missing search query" });
+  }
+
+  try {
+    // Check if the user is a member of the group
+    const isMember = await pbUser
+      .collection("memberships")
+      .getFirstListItem(`group="${groupId}" && user="${req.user.id}"`);
+
+    if (!isMember) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
+    // Get all memberships in the group and expand user
+    const members = await pbUser.collection("memberships").getFullList({
+      filter: `group="${groupId}"`,
+      expand: "user",
+    });
+
+    // Filter by query on expanded user's name or email
+    const filtered = members.filter((m) => {
+      const user = m.expand?.user;
+      const q = query.toLowerCase();
+      return (
+        user?.username?.toLowerCase().includes(q) ||
+        user?.email?.toLowerCase().includes(q)
+      );
+    });
+
+    res.json(filtered);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+}
+

@@ -5,6 +5,7 @@ import {
   listGroups,
   listPublicGroups,
   getGroupDetails,
+  searchGroups,
 } from "../controllers/group.controller.js";
 
 const router = express.Router();
@@ -117,4 +118,29 @@ router.get("/explore", listPublicGroups);
  *         description: Unauthorized
  */
 router.get("/:groupId", requireAuth, getGroupDetails);
+
+/**
+ * @swagger
+ * /groups/search:
+ *   get:
+ *     summary: Search groups the user owns or is a member of by name
+ *     tags: [Groups]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: q
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Keyword to search in group names
+ *     responses:
+ *       200:
+ *         description: Array of matching groups
+ *       400:
+ *         description: Missing or invalid query parameter
+ *       401:
+ *         description: Unauthorized
+ */
+router.get("/search", requireAuth, searchGroups);
 export default router;

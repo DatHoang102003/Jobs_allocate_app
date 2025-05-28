@@ -105,4 +105,25 @@ class GroupService {
 
     return data;
   }
+
+  /* -------------------------------------------------
+   Search groups I own or am a member of by name
+------------------------------------------------- */
+  static Future<List<dynamic>> searchGroups(String keyword) async {
+    if (keyword.trim().isEmpty) {
+      throw Exception("Search keyword cannot be empty");
+    }
+
+    final encodedKeyword = Uri.encodeQueryComponent(keyword);
+    final res = await http.get(
+      Uri.parse('$_base/groups/search?q=$encodedKeyword'),
+      headers: await _headers(),
+    );
+
+    if (res.statusCode != 200) {
+      throw Exception(jsonDecode(res.body)['error'] ?? "Search failed");
+    }
+
+    return jsonDecode(res.body) as List<dynamic>;
+  }
 }

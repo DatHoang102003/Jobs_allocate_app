@@ -102,4 +102,44 @@ class MembershipService {
     if (res.statusCode != 200) throw Exception(res.body);
     return jsonDecode(res.body);
   }
+
+  /* -------------------------------------------------
+   Search members in a group by name or email
+------------------------------------------------- */
+  static Future<List<dynamic>> searchMembersInGroup(
+      String groupId, String query) async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('auth_token') ?? '';
+
+    final res = await http.get(
+      Uri.parse(
+          '$_base/groups/$groupId/members/search?query=${Uri.encodeComponent(query)}'),
+      headers: await _headers(),
+    );
+
+    if (res.statusCode != 200) {
+      throw Exception(
+          jsonDecode(res.body)['error'] ?? 'Failed to search members');
+    }
+
+    final members = jsonDecode(res.body) as List<dynamic>;
+
+    // ── Build avatarUrl for each membership.user ──
+    for (final m in members) {
+      final expand = m['expand'] as Map<String, dynamic>?;
+      final u = expand?['user'] as Map<String, dynamic>?;
+
+      if (u != null) {
+        final fileId = u['avatar'] as String?;
+        if (fileId != null && fileId.isNotEmpty) {
+          u['avatarUrl'] = 'http://10.0.2.2:8090/api/files/_pb_users_auth_/'
+              '${u['id']}/$fileId?token=$token';
+        } else {
+          u['avatarUrl'] = null;
+        }
+      }
+    }
+
+    return members;
+  }
 }

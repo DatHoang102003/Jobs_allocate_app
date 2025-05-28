@@ -133,3 +133,27 @@ export async function getGroupDetails(req, res) {
     res.status(err?.status || 400).json({ error: err.message });
   }
 }
+
+export async function searchGroups(req, res) {
+  const pbUser = req.pbUser;
+  const keyword = req.query.q?.trim();
+
+  if (!keyword) {
+    return res.status(400).json({ error: "Missing search keyword in query parameter 'q'" });
+  }
+
+  try {
+    const groups = await pbUser.collection("groups").getFullList({
+      filter: `name~"${keyword}"`, 
+      sort: "-created",
+    });
+
+    return res.json(groups);
+  } catch (err) {
+    console.error("searchGroups error:", err.response?.data || err);
+    return res.status(400).json({ error: err.message || "Search failed" });
+  }
+}
+
+
+

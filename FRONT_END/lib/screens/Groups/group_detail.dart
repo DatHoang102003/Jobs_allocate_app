@@ -3,7 +3,6 @@ import 'package:intl/intl.dart';
 import 'package:task_manager_app/screens/Tasks/create_task.dart';
 import 'package:task_manager_app/services/group_service.dart';
 import 'package:task_manager_app/services/membership_service.dart';
-import 'package:task_manager_app/services/task_service.dart';
 import 'package:task_manager_app/services/auth_service.dart';
 
 class GroupDetailScreen extends StatefulWidget {
