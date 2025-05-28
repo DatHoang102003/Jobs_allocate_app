@@ -5,7 +5,7 @@ import 'package:task_manager_app/screens/home.dart' show CustomDrawer;
 import '../../models/groups.dart';
 import '../../services/invite_service.dart';
 import 'edit_dialog.dart';
-import 'group_detail.dart';
+import 'Group_detail/group_detail.dart';
 
 class GroupScreen extends StatefulWidget {
   static const routeName = '/groups';
