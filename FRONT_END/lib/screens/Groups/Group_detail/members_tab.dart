@@ -2,12 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:task_manager_app/services/membership_service.dart';
 import 'package:task_manager_app/services/auth_service.dart';
 
-/* ───────────── search bar (unchanged) ───────────── */
+/* ───────────── search bar ───────────── */
 class SearchBarWidget extends StatelessWidget {
   final TextEditingController controller;
   final ValueChanged<String> onChanged;
-  const SearchBarWidget(
-      {super.key, required this.controller, required this.onChanged});
+  const SearchBarWidget({
+    super.key,
+    required this.controller,
+    required this.onChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -26,14 +29,14 @@ class SearchBarWidget extends StatelessWidget {
   }
 }
 
-/* ───────────── Members tab (UI identical to original) ───────────── */
+/* ───────────── Members tab ───────────── */
 class MembersTab extends StatefulWidget {
   final String groupId;
   final String ownerId;
   final List<dynamic> allMembers;
   final List<dynamic> admins;
   final List<dynamic> members;
-  final bool isAdmin;
+  final bool canManage; // owner or admin
   final VoidCallback onRefresh;
 
   const MembersTab({
@@ -43,7 +46,7 @@ class MembersTab extends StatefulWidget {
     required this.allMembers,
     required this.admins,
     required this.members,
-    required this.isAdmin,
+    required this.canManage,
     required this.onRefresh,
   });
 
@@ -82,11 +85,13 @@ class _MembersTabState extends State<MembersTab> {
         content: Text('Remove $name from group?'),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel')),
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
           TextButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Remove')),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Remove'),
+          ),
         ],
       ),
     );
@@ -99,7 +104,7 @@ class _MembersTabState extends State<MembersTab> {
 
     try {
       await MembershipService.removeMember(
-        widget.groupId, // ← keep both args
+        widget.groupId, // both args required
         m['id'] as String,
       );
       if (mounted) {
@@ -124,12 +129,13 @@ class _MembersTabState extends State<MembersTab> {
     final targetRole = m['role'] as String? ?? 'member';
 
     final bool callerIsOwner = widget.ownerId == AuthService.currentUserId;
-    final bool callerIsAdmin = widget.isAdmin;
 
-    bool canRemove = callerIsOwner || callerIsAdmin;
-    canRemove &= targetId != AuthService.currentUserId;
-    canRemove &= targetId != widget.ownerId;
-    if (!callerIsOwner && targetRole == 'admin') canRemove = false;
+    bool canRemove = callerIsOwner || widget.canManage;
+    canRemove &= targetId != AuthService.currentUserId; // not myself
+    canRemove &= targetId != widget.ownerId; // not owner
+    if (!callerIsOwner && targetRole == 'admin') {
+      canRemove = false; // admin vs admin
+    }
 
     final avatarUrl = u['avatarUrl'] as String?;
 
