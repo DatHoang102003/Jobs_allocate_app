@@ -6,6 +6,7 @@ import {
   listTasksByGroup,
   updateTaskStatus,
   deleteTask,
+  countTasksByGroup,
 } from "../controllers/task.controller.js";
 
 const router = express.Router();
@@ -133,6 +134,37 @@ const router = express.Router();
  *         description: Task deleted
  */
 
+/**
+ * @swagger
+ * /groups/{groupId}/tasks/count:
+ *   get:
+ *     summary: Count tasks in a group
+ *     tags: [Tasks]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: groupId
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Task count
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 count:
+ *                   type: integer
+ */
+
+
 // Create a task in a group
 router.post("/groups/:groupId/tasks", requireAuth, createTask);
 
@@ -144,5 +176,8 @@ router.patch("/tasks/:taskId/status", requireAuth, updateTaskStatus);
 
 // Delete a task
 router.delete("/tasks/:taskId", requireAuth, deleteTask);
+
+// Count number of tasks in a group
+router.get("/groups/:groupId/tasks/count", requireAuth, countTasksByGroup);
 
 export default router;

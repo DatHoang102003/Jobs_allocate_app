@@ -4,25 +4,34 @@ import '../../models/groups.dart';
 import '../../services/group_service.dart';
 
 class GroupsProvider with ChangeNotifier {
-  final List<Group> _groups = [];
+  final List<Group> _adminGroups = [];
+  final List<Group> _memberGroups = [];
   bool _loading = false;
   Group? _current;
 
-  List<Group> get groups => List.unmodifiable(_groups);
+  List<Group> get adminGroups => List.unmodifiable(_adminGroups);
+  List<Group> get memberGroups => List.unmodifiable(_memberGroups);
   bool get isLoading => _loading;
   Group? get currentGroup => _current;
 
-  /* ---------------- fetch all groups from backend ---------------- */
   Future<void> fetchGroups() async {
     _loading = true;
     notifyListeners();
 
     try {
-      final raw = await GroupService.getGroups(); // REST → List<Map>
-      _groups
+      final rawAdmin = await GroupService.getAdminGroups();
+      final rawMember = await GroupService.getMemberGroups();
+
+      _adminGroups
         ..clear()
-        ..addAll(raw.map((e) => Group.fromJson(e))); // convert to model
-      _current ??= _groups.isNotEmpty ? _groups.first : null;
+        ..addAll(rawAdmin.map((e) => Group.fromJson(e)));
+      _memberGroups
+        ..clear()
+        ..addAll(rawMember.map((e) => Group.fromJson(e)));
+
+      _current ??= _adminGroups.isNotEmpty
+          ? _adminGroups.first
+          : (_memberGroups.isNotEmpty ? _memberGroups.first : null);
     } catch (e) {
       debugPrint('fetchGroups error: $e');
       rethrow;
@@ -32,18 +41,24 @@ class GroupsProvider with ChangeNotifier {
     }
   }
 
-  /* ---------------- select a group (for edit / detail) ----------- */
   void setCurrent(Group g) {
     _current = g;
     notifyListeners();
   }
 
-  /* ---------------- update a group after edit dialog ------------- */
   void updateGroup(Group updated) {
-    final i = _groups.indexWhere((g) => g.id == updated.id);
-    if (i != -1) {
-      _groups[i] = updated;
-      if (_current?.id == updated.id) _current = updated;
+    bool updatedAny = false;
+
+    for (var list in [_adminGroups, _memberGroups]) {
+      final i = list.indexWhere((g) => g.id == updated.id);
+      if (i != -1) {
+        list[i] = updated;
+        updatedAny = true;
+      }
+    }
+
+    if (updatedAny && _current?.id == updated.id) {
+      _current = updated;
       notifyListeners();
     }
   }

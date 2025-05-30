@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:task_manager_app/models/tasks.dart';
 import 'package:task_manager_app/screens/Groups/groups_manager.dart';
 import 'package:task_manager_app/screens/home.dart' show CustomDrawer;
 import '../../models/groups.dart';
 import '../../services/invite_service.dart';
+import '../../services/task_service.dart';
 import 'edit_dialog.dart';
 import 'Group_detail/group_detail.dart';
+import 'package:percent_indicator/circular_percent_indicator.dart';
 
 class GroupScreen extends StatefulWidget {
   static const routeName = '/groups';
@@ -18,6 +21,7 @@ class GroupScreen extends StatefulWidget {
 class _GroupScreenState extends State<GroupScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  String _selectedRole = 'all';
 
   @override
   void initState() {
@@ -89,67 +93,163 @@ class _GroupScreenState extends State<GroupScreen>
   }
 
   Widget _buildOverviewTab(GroupsProvider provider) {
-    return ListView.builder(
-      padding: const EdgeInsets.all(16.0),
-      itemCount: provider.groups.length,
-      itemBuilder: (context, index) {
-        final group = provider.groups[index];
+    List<Group> groupsToShow;
+    switch (_selectedRole) {
+      case 'admin':
+        groupsToShow = provider.adminGroups;
+        break;
+      case 'member':
+        groupsToShow = provider.memberGroups;
+        break;
+      default:
+        groupsToShow = [...provider.adminGroups, ...provider.memberGroups];
+    }
 
-        return GestureDetector(
-          onTap: () {
-            provider.setCurrent(group);
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => GroupDetailScreen(groupId: group.id),
-              ),
-            );
-          },
-          child: Container(
-            margin: const EdgeInsets.only(bottom: 16),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF3EDFF),
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 8,
-                  offset: const Offset(0, 4),
-                )
-              ],
-            ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+          child: DropdownButton<String>(
+            value: _selectedRole,
+            items: const [
+              DropdownMenuItem(value: 'all', child: Text("All")),
+              DropdownMenuItem(value: 'admin', child: Text("Admin")),
+              DropdownMenuItem(value: 'member', child: Text("Member")),
+            ],
+            onChanged: (value) {
+              if (value != null) {
+                setState(() {
+                  _selectedRole = value;
+                });
+              }
+            },
+          ),
+        ),
+        Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.all(16.0),
+            itemCount: groupsToShow.length,
+            itemBuilder: (context, index) {
+              final group = groupsToShow[index];
+              return _buildGroupCard(context, group, provider);
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+Widget _buildGroupCard(
+    BuildContext context, Group group, GroupsProvider provider) {
+  return GestureDetector(
+    onTap: () {
+      provider.setCurrent(group);
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => GroupDetailScreen(groupId: group.id),
+        ),
+      );
+    },
+    child: Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          )
+        ],
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 24,
+            backgroundColor: Colors.deepPurple.shade50,
+            child: const Icon(Icons.folder, color: Colors.deepPurple),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(group.name,
                     style: const TextStyle(
-                        fontSize: 18, fontWeight: FontWeight.bold)),
+                        fontSize: 16, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 4),
                 Text(group.description,
-                    style: const TextStyle(color: Colors.black87)),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    const Icon(Icons.calendar_today,
-                        size: 16, color: Colors.grey),
-                    const SizedBox(width: 4),
-                    Text(
-                        "Created: ${group.created.toLocal().toIso8601String().split('T').first}"),
-                    const SizedBox(width: 16),
-                    const Icon(Icons.update, size: 16, color: Colors.grey),
-                    const SizedBox(width: 4),
-                    Text(
-                        "Updated: ${group.updated.toLocal().toIso8601String().split('T').first}"),
-                  ],
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 13, color: Colors.grey)),
+                const SizedBox(height: 4),
+                FutureBuilder<List<int>>(
+                  future: _getTaskCounts(group.id),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState != ConnectionState.done) {
+                      return const Text("Đang tải...",
+                          style: TextStyle(fontSize: 12, color: Colors.grey));
+                    } else {
+                      final total = snapshot.data![0];
+                      return Text(
+                        "$total Tasks",
+                        style: const TextStyle(
+                            fontSize: 13, color: Colors.black54),
+                      );
+                    }
+                  },
                 ),
               ],
             ),
           ),
-        );
-      },
-    );
-  }
+          const SizedBox(width: 12),
+          FutureBuilder<List<int>>(
+            future: _getTaskCounts(group.id),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState != ConnectionState.done ||
+                  snapshot.hasError) {
+                return CircularPercentIndicator(
+                  radius: 28.0,
+                  lineWidth: 5.0,
+                  percent: 0.0,
+                  center: const Text("0%"),
+                  progressColor: Colors.grey,
+                );
+              } else {
+                final total = snapshot.data![0];
+                final todo = snapshot.data![1];
+                final percent = total == 0 ? 0 : (todo / total).clamp(0.0, 1.0);
+                final percentText = "${(percent * 100).round()}%";
+
+                return CircularPercentIndicator(
+                  radius: 28.0,
+                  lineWidth: 5.0,
+                  percent: percent.toDouble(),
+                  center: Text(percentText,
+                      style: const TextStyle(fontWeight: FontWeight.bold)),
+                  progressColor: Colors.deepPurple,
+                  backgroundColor: Colors.deepPurple.shade100,
+                  animation: true,
+                );
+              }
+            },
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+/// Helper để fetch cả 2 count: tổng số task và số task có status 'doing'
+Future<List<int>> _getTaskCounts(String groupId) async {
+  final total = await TaskService.countTasks(groupId);
+  final todo = await TaskService.countTasks(groupId, status: 'doing');
+  return [total, todo];
 }
 
 class InviteRequestsTab extends StatefulWidget {
@@ -172,7 +272,6 @@ class _InviteRequestsTabState extends State<InviteRequestsTab> {
   Future<void> _fetchData() async {
     try {
       final inviteRes = await InviteService.listMyInvites();
-      print('Fetched invites: $inviteRes'); // ✅ Kiểm tra dữ liệu
       setState(() {
         _invites = inviteRes;
         _isLoading = false;

@@ -44,4 +44,21 @@ class TaskService {
 
     return jsonDecode(res.body) as Map<String, dynamic>;
   }
+
+  static Future<int> countTasks(String groupId, {String? status}) async {
+    final queryParams = status != null ? '?status=$status' : '';
+    final url = '$_baseUrl/groups/$groupId/tasks/count$queryParams';
+
+    final res = await http.get(
+      Uri.parse(url),
+      headers: await _headers(),
+    );
+
+    if (res.statusCode != 200) {
+      throw Exception('Failed to count tasks: ${res.body}');
+    }
+
+    final data = jsonDecode(res.body) as Map<String, dynamic>;
+    return data['count'] as int;
+  }
 }

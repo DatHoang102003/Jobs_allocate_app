@@ -126,4 +126,38 @@ class GroupService {
 
     return jsonDecode(res.body) as List<dynamic>;
   }
+
+  /* -------------------------------------------------
+     List groups where I'm an admin
+  ------------------------------------------------- */
+  static Future<List<dynamic>> getAdminGroups() async {
+    final res = await http.get(
+      Uri.parse('$_base/groups/admin'),
+      headers: await _headers(),
+    );
+
+    if (res.statusCode != 200) {
+      throw Exception(
+          jsonDecode(res.body)['error'] ?? 'Failed to load admin groups');
+    }
+
+    return jsonDecode(res.body) as List<dynamic>;
+  }
+
+  /* -------------------------------------------------
+     List groups where I'm a member (non-admin)
+  ------------------------------------------------- */
+  static Future<List<dynamic>> getMemberGroups() async {
+    final res = await http.get(
+      Uri.parse('$_base/groups/member'),
+      headers: await _headers(),
+    );
+
+    if (res.statusCode != 200) {
+      throw Exception(
+          jsonDecode(res.body)['error'] ?? 'Failed to load member groups');
+    }
+
+    return jsonDecode(res.body) as List<dynamic>;
+  }
 }

@@ -26,7 +26,7 @@ class _TaskScreenState extends State<TaskScreen>
     if (tp.tasks.isEmpty) tp.fetchRecent();
 
     final gp = context.read<GroupsProvider>();
-    if (gp.groups.isEmpty) gp.fetchGroups();
+    // if (gp.groups.isEmpty) gp.fetchGroups();
   }
 
   @override
@@ -100,26 +100,26 @@ class _TaskScreenState extends State<TaskScreen>
         final t = tasks[index];
 
         // safely look up the group (never returns null)
-        final groupModel = groupsProv.groups.firstWhere(
-          (gr) => gr.id == t['group'],
-          orElse: () => Group(
-            id: '',
-            name: 'Unknown',
-            description: '',
-            owner: '',
-            created: DateTime.now(),
-            updated: DateTime.now(),
-          ),
-        );
-        final groupName = groupModel.name;
+        // final groupModel = groupsProv.groups.firstWhere(
+        //   (gr) => gr.id == t['group'],
+        //   orElse: () => Group(
+        //     id: '',
+        //     name: 'Unknown',
+        //     description: '',
+        //     owner: '',
+        //     created: DateTime.now(),
+        //     updated: DateTime.now(),
+        //   ),
+        // );
+        // final groupName = groupModel.name;
 
-        return TaskCardUI(
-          title: t['title'],
-          description: t['description'] ?? '',
-          groupName: groupName,
-          deadline: DateTime.tryParse(t['deadline'] ?? ''),
-          status: t['status'],
-        );
+        // return TaskCardUI(
+        //   title: t['title'],
+        //   description: t['description'] ?? '',
+        //   // groupName: groupName,
+        //   deadline: DateTime.tryParse(t['deadline'] ?? ''),
+        //   status: t['status'],
+        // );
       },
     );
   }

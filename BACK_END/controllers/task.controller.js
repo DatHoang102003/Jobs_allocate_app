@@ -101,3 +101,30 @@ export async function deleteTask(req, res) {
     return res.status(400).json({ error: err.message });
   }
 }
+/**
+ * GET /groups/:groupId/tasks/count
+ * Count number of tasks in a group (optionally filtered by status)
+ */
+export async function countTasksByGroup(req, res) {
+  const pbUser = req.pbUser;
+  const { groupId } = req.params;
+  const { status } = req.query;
+
+  try {
+    const filters = [`group="${groupId}"`];
+    if (status) filters.push(`status="${status}"`);
+
+    const filterString = filters.join(" && ");
+
+    const tasks = await pbUser.collection("tasks").getFullList({
+      filter: filterString,
+      fields: "id", // only fetch IDs for better performance
+    });
+
+    return res.json({ count: tasks.length });
+  } catch (err) {
+    console.error("countTasksByGroup error:", err.response?.data || err);
+    return res.status(400).json({ error: err.message });
+  }
+}
+
