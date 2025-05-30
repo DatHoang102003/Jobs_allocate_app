@@ -155,5 +155,62 @@ export async function searchGroups(req, res) {
   }
 }
 
+/**
+ * GET /groups/admin
+ * List all groups where the current user has the "admin" role
+ */
+export async function listAdminGroups(req, res) {
+  const pbUser = req.pbUser;
+  const userId = req.user.id;
 
+  try {
+    // fetch memberships where role="admin"
+    const mships = await pbUser
+      .collection("memberships")
+      .getFullList({
+        filter: `user="${userId}" && role="admin"`,
+        expand: "group",
+        sort: "-created",
+      });
+
+    // extract the expanded group records
+    const groups = mships
+      .map((m) => m.expand?.group)
+      .filter((g) => g); 
+
+    return res.json(groups);
+  } catch (err) {
+    console.error("listAdminGroups error:", err.response?.data || err);
+    return res.status(400).json({ error: err.message });
+  }
+}
+
+/**
+ * GET /groups/member
+ * List all groups where the current user has the "member" role
+ */
+export async function listMemberGroups(req, res) {
+  const pbUser = req.pbUser;
+  const userId = req.user.id;
+
+  try {
+    // fetch memberships where role="member"
+    const mships = await pbUser
+      .collection("memberships")
+      .getFullList({
+        filter: `user="${userId}" && role="member"`,
+        expand: "group",
+        sort: "-created",
+      });
+
+    const groups = mships
+      .map((m) => m.expand?.group)
+      .filter((g) => g);
+
+    return res.json(groups);
+  } catch (err) {
+    console.error("listMemberGroups error:", err.response?.data || err);
+    return res.status(400).json({ error: err.message });
+  }
+}
 
