@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-
 import '../../models/groups.dart';
 import '../../services/group_service.dart';
 
@@ -14,6 +13,9 @@ class GroupsProvider with ChangeNotifier {
   bool get isLoading => _loading;
   Group? get currentGroup => _current;
 
+  // ───────────────────────────────────────────────
+  // Fetch all groups I own or belong to
+  // ───────────────────────────────────────────────
   Future<void> fetchGroups() async {
     _loading = true;
     notifyListeners();
@@ -41,11 +43,99 @@ class GroupsProvider with ChangeNotifier {
     }
   }
 
+  // ───────────────────────────────────────────────
+  // Create a new group
+  // ───────────────────────────────────────────────
+  Future<void> createGroup({
+    required String name,
+    String description = '',
+    bool isPublic = true,
+  }) async {
+    try {
+      final data = await GroupService.createGroup(
+        name: name,
+        description: description,
+        isPublic: isPublic,
+      );
+      final newGroup = Group.fromJson(data);
+      _adminGroups.add(newGroup);
+      _current ??= newGroup;
+      notifyListeners();
+    } catch (e) {
+      debugPrint('createGroup error: $e');
+      rethrow;
+    }
+  }
+
+  // ───────────────────────────────────────────────
+  // Update name / description of a group
+  // ───────────────────────────────────────────────
+  Future<void> updateGroupInfo({
+    required String id,
+    required String name,
+    required String description,
+  }) async {
+    try {
+      final data = await GroupService.updateGroup(id,
+          name: name, description: description);
+      final updated = Group.fromJson(data);
+      updateGroup(updated);
+    } catch (e) {
+      debugPrint('updateGroupInfo error: $e');
+      rethrow;
+    }
+  }
+
+  // ───────────────────────────────────────────────
+  // Search groups by name
+  // ───────────────────────────────────────────────
+  Future<List<Group>> searchGroups(String keyword) async {
+    try {
+      final results = await GroupService.searchGroups(keyword);
+      return results.map((e) => Group.fromJson(e)).toList();
+    } catch (e) {
+      debugPrint('searchGroups error: $e');
+      rethrow;
+    }
+  }
+
+  // ───────────────────────────────────────────────
+  // Fetch full detail of a group (including members, tasks)
+  // ───────────────────────────────────────────────
+  Future<Group> fetchGroupDetail(String groupId) async {
+    try {
+      final data = await GroupService.getGroupDetail(groupId);
+      return Group.fromJson(data);
+    } catch (e) {
+      debugPrint('fetchGroupDetail error: $e');
+      rethrow;
+    }
+  }
+
+  // ───────────────────────────────────────────────
+  // Refresh current group data
+  // ───────────────────────────────────────────────
+  Future<void> refreshCurrentGroup() async {
+    if (_current == null) return;
+    try {
+      final updated = await fetchGroupDetail(_current!.id);
+      updateGroup(updated);
+    } catch (e) {
+      debugPrint('refreshCurrentGroup error: $e');
+    }
+  }
+
+  // ───────────────────────────────────────────────
+  // Set current active group
+  // ───────────────────────────────────────────────
   void setCurrent(Group g) {
     _current = g;
     notifyListeners();
   }
 
+  // ───────────────────────────────────────────────
+  // Update group in admin/member list
+  // ───────────────────────────────────────────────
   void updateGroup(Group updated) {
     bool updatedAny = false;
 

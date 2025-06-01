@@ -7,6 +7,7 @@ import {
   updateTaskStatus,
   deleteTask,
   countTasksByGroup,
+  getTasksForToday,
 } from "../controllers/task.controller.js";
 
 const router = express.Router();
@@ -163,6 +164,41 @@ const router = express.Router();
  *                 count:
  *                   type: integer
  */
+/**
+ * @swagger
+ * /tasks/today:
+ *   get:
+ *     summary: Get tasks assigned for today
+ *     tags: [Tasks]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of today's tasks
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   id:
+ *                     type: string
+ *                   title:
+ *                     type: string
+ *                   description:
+ *                     type: string
+ *                   status:
+ *                     type: string
+ *                     enum: [todo, doing, done]
+ *                   deadline:
+ *                     type: string
+ *                     format: date-time
+ *                   assignee:
+ *                     type: string
+ *       401:
+ *         description: Unauthorized
+ */
 
 
 // Create a task in a group
@@ -179,5 +215,7 @@ router.delete("/tasks/:taskId", requireAuth, deleteTask);
 
 // Count number of tasks in a group
 router.get("/groups/:groupId/tasks/count", requireAuth, countTasksByGroup);
+// Fetch tasks for the current day
+router.get("/tasks/today", requireAuth, getTasksForToday);
 
 export default router;
