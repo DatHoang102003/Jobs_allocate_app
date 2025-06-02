@@ -66,19 +66,6 @@ class GroupService {
   }
 
   /* -------------------------------------------------
-     Update basic group info (name / description)
-  ------------------------------------------------- */
-  static Future<Map<String, dynamic>> updateGroup(String id,
-      {required String name, required String description}) async {
-    final body = jsonEncode({'name': name, 'description': description});
-    final res = await http.patch(Uri.parse('$_base/groups/$id'),
-        headers: await _headers(), body: body);
-
-    if (res.statusCode != 200) throw Exception(res.body);
-    return jsonDecode(res.body);
-  }
-
-  /* -------------------------------------------------
    Create a new group
 ------------------------------------------------- */
   static Future<Map<String, dynamic>> createGroup({

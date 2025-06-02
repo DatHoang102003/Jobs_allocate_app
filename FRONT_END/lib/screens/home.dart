@@ -1,15 +1,46 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/groups.dart';
+import '../services/auth_service.dart';
+import '../services/user_service.dart';
 import 'Auth/account.dart';
 import 'Auth/login.dart';
 import 'Groups/Group_detail/group_detail.dart';
 import 'Groups/create_dialog.dart';
-import '../services/auth_service.dart';
-import '../services/user_service.dart';
 import 'Groups/groups_manager.dart';
+import 'Members/join_manager.dart';
+import 'Members/membership_manager.dart';
 import 'Tasks/task.dart';
 import 'Tasks/tasks_manager.dart';
+import 'Auth/auth_manager.dart';
+
+enum UserGroupStatus { admin, member, notJoined }
+
+Future<UserGroupStatus> checkUserGroupStatus({
+  required String groupId,
+  required String userId,
+  required GroupsProvider groupsProvider,
+  required MemberManager memberManager,
+}) async {
+  // Kiểm tra xem nhóm có trong adminGroups không
+  if (groupsProvider.adminGroups.any((group) => group.id == groupId)) {
+    return UserGroupStatus.admin;
+  }
+
+  // Kiểm tra xem nhóm có trong memberGroups không
+  if (groupsProvider.memberGroups.any((group) => group.id == groupId)) {
+    return UserGroupStatus.member;
+  }
+
+  // Nếu không có trong adminGroups hoặc memberGroups, kiểm tra thêm qua MemberManager
+  await memberManager.fetchMembers(groupId, myUserId: userId);
+  if (memberManager.isUserMember(userId)) {
+    return UserGroupStatus.member;
+  }
+
+  // Nếu không phải admin hoặc member, người dùng chưa tham gia
+  return UserGroupStatus.notJoined;
+}
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -61,6 +92,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final groupProvider = Provider.of<GroupsProvider>(context);
     final taskProvider = Provider.of<TasksProvider>(context);
+    final authManager = Provider.of<AuthManager>(context);
 
     return Scaffold(
       backgroundColor: const Color(0xFFEDE8E6),
@@ -84,7 +116,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 children: [
                   _searchBox(),
                   const SizedBox(height: 16),
-                  if (_searchResults.isNotEmpty) _buildSearchResultsCard(),
+                  if (_searchResults.isNotEmpty)
+                    _buildSearchResultsCard(
+                        authManager.userId, _searchResults, _searchController),
                   const SizedBox(height: 24),
                   _buildTodayTaskCard(taskProvider),
                   const SizedBox(height: 24),
@@ -140,7 +174,14 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildSearchResultsCard() {
+  Widget _buildSearchResultsCard(String? currentUserId,
+      List<Group> _searchResults, TextEditingController _searchController) {
+    if (currentUserId == null) {
+      return const Center(
+        child: Text("User not logged in"),
+      );
+    }
+
     return Card(
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -150,19 +191,82 @@ class _HomeScreenState extends State<HomeScreen> {
         itemCount: _searchResults.length,
         itemBuilder: (context, index) {
           final group = _searchResults[index];
-          return ListTile(
-            title: Text(group.name),
-            subtitle: Text(group.description ?? ""),
-            onTap: () {
-              Provider.of<GroupsProvider>(context, listen: false)
-                  .setCurrent(group);
-              _searchController.clear();
-              setState(() => _searchResults = []);
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => GroupDetailScreen(groupId: group.id),
+          final memberManager =
+              Provider.of<MemberManager>(context, listen: false);
+          final groupsProvider =
+              Provider.of<GroupsProvider>(context, listen: false);
+          final adminName =
+              group.owner.isNotEmpty ? group.owner : "Unknown Admin";
+
+          return FutureBuilder<UserGroupStatus>(
+            future: checkUserGroupStatus(
+              groupId: group.id,
+              userId: currentUserId,
+              groupsProvider: groupsProvider,
+              memberManager: memberManager,
+            ),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const ListTile(
+                  title: Text("Loading..."),
+                );
+              }
+
+              final userStatus = snapshot.data ?? UserGroupStatus.notJoined;
+
+              return ListTile(
+                title: Text(group.name),
+                subtitle: Text("Admin: $adminName"),
+                trailing: ElevatedButton(
+                  onPressed: () async {
+                    final joinManager =
+                        Provider.of<JoinManager>(context, listen: false);
+                    try {
+                      if (userStatus == UserGroupStatus.admin) {
+                        // No action for owner
+                        return;
+                      } else if (userStatus == UserGroupStatus.member) {
+                        await memberManager.leaveGroup();
+                      } else {
+                        await joinManager.sendJoinRequest(group.id);
+                      }
+
+                      final updatedResults = await groupsProvider
+                          .searchGroups(_searchController.text);
+                      setState(() => _searchResults = updatedResults);
+                    } catch (e) {
+                      debugPrint("Action failed: $e");
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: userStatus == UserGroupStatus.admin
+                        ? Colors.grey
+                        : (userStatus == UserGroupStatus.member
+                            ? Colors.redAccent
+                            : Colors.green),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                  ),
+                  child: Text(
+                    userStatus == UserGroupStatus.admin
+                        ? "Owner"
+                        : (userStatus == UserGroupStatus.member
+                            ? "Leave"
+                            : "Join"),
+                  ),
                 ),
+                onTap: () {
+                  groupsProvider.setCurrent(group);
+                  _searchController.clear();
+                  setState(() => _searchResults = []);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => GroupDetailScreen(groupId: group.id),
+                    ),
+                  );
+                },
               );
             },
           );

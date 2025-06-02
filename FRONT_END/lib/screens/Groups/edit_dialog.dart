@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../models/groups.dart';
+import 'groups_manager.dart';
 
 Future<void> showEditGroupDialog(
   BuildContext context,
   Group group,
-  Function(Group) onUpdate,
+  void Function(Group updated) onGroupEdited,
 ) async {
   final nameController = TextEditingController(text: group.name);
   final descriptionController = TextEditingController(text: group.description);
@@ -43,22 +45,27 @@ Future<void> showEditGroupDialog(
             onPressed: () => Navigator.of(context).pop(),
             child: const Text('Cancel'),
           ),
-          ElevatedButton(
-            onPressed: () {
-              final updatedGroup = Group(
-                id: group.id,
-                name: nameController.text,
-                description: descriptionController.text,
-                owner: group.owner,
-                created: group.created,
-                updated: DateTime.now(),
-              );
-              onUpdate(updatedGroup);
-              Navigator.of(context).pop();
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.deepPurple),
-            child: const Text('Save'),
-          ),
+          // ElevatedButton(
+          //   // onPressed: () async {
+          //   //   try {
+          //   //     // Access GroupsProvider to call updateGroupInfo
+          //   //     await Provider.of<GroupsProvider>(context, listen: false)
+          //   //         .updateGroupInfo(
+          //   //       id: group.id,
+          //   //       name: nameController.text,
+          //   //       description: descriptionController.text,
+          //   //     );
+          //   //     Navigator.of(context).pop();
+          //   //   } catch (e) {
+          //   //     // Show error message
+          //   //     ScaffoldMessenger.of(context).showSnackBar(
+          //   //       SnackBar(content: Text('Failed to update group: $e')),
+          //   //     );
+          //   //   }
+          //   // },
+          //   style: ElevatedButton.styleFrom(backgroundColor: Colors.deepPurple),
+          //   child: const Text('Save'),
+          // ),
         ],
       );
     },

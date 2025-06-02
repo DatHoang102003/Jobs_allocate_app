@@ -5,7 +5,6 @@ import 'package:task_manager_app/screens/home.dart' show CustomDrawer;
 import '../../models/groups.dart';
 import '../../services/invite_service.dart';
 import '../../services/task_service.dart';
-import 'edit_dialog.dart';
 import 'Group_detail/group_detail.dart';
 import 'package:percent_indicator/circular_percent_indicator.dart';
 
@@ -37,9 +36,6 @@ class _GroupScreenState extends State<GroupScreen>
     super.dispose();
   }
 
-  void _onGroupEdited(Group updated) =>
-      context.read<GroupsProvider>().updateGroup(updated);
-
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<GroupsProvider>();
@@ -48,20 +44,6 @@ class _GroupScreenState extends State<GroupScreen>
       drawer: const CustomDrawer(),
       appBar: AppBar(
         title: const Text("Groups"),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.edit),
-            onPressed: provider.currentGroup == null
-                ? null
-                : () {
-                    showEditGroupDialog(
-                      context,
-                      provider.currentGroup!,
-                      _onGroupEdited,
-                    );
-                  },
-          ),
-        ],
         automaticallyImplyLeading: true,
         bottom: TabBar(
           controller: _tabController,

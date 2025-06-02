@@ -5,6 +5,9 @@ import 'package:task_manager_app/services/group_service.dart';
 import 'package:task_manager_app/services/membership_service.dart';
 import 'package:task_manager_app/services/auth_service.dart';
 
+import '../../../models/groups.dart';
+import '../edit_dialog.dart';
+import '../groups_manager.dart';
 import 'members_tab.dart';
 import 'tasks_tab.dart';
 
@@ -62,6 +65,42 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
     if (created == true) await _fetch();
   }
 
+  // Placeholder for Add Member functionality
+  Future<void> _addMember() async {
+    // Implement your add member logic here
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Add Member functionality coming soon!')),
+    );
+  }
+
+  // Placeholder for Edit Group Info functionality
+  Future<void> _editGroupInfo() async {
+    final g = detail!['group'];
+    final groupModel = Group(
+      id: g['id'],
+      name: g['name'],
+      description: g['description'] ?? '',
+      owner: g['owner'],
+      created: DateTime.parse(g['created']),
+      updated: DateTime.parse(g['updated']),
+    );
+
+    await showEditGroupDialog(context, groupModel, (updatedGroup) async {
+      await _fetch(); // Refresh group detail
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Updated successfully')),
+      );
+    });
+  }
+
+  // Placeholder for Delete Group functionality
+  Future<void> _deleteGroup() async {
+    // Implement your delete group logic here
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Delete Group functionality coming soon!')),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     // Lấy userId từ AuthService (có thể thay bằng Provider nếu dùng AuthManager)
@@ -108,6 +147,45 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
       child: Scaffold(
         appBar: AppBar(
           title: Text(g['name']),
+          actions: [
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.settings),
+              onSelected: (value) {
+                switch (value) {
+                  case 'add_member':
+                    _addMember();
+                    break;
+                  case 'add_task':
+                    _openCreateTaskDialog();
+                    break;
+                  case 'edit_info':
+                    _editGroupInfo();
+                    break;
+                  case 'delete_group':
+                    _deleteGroup();
+                    break;
+                }
+              },
+              itemBuilder: (BuildContext context) => [
+                const PopupMenuItem(
+                  value: 'add_member',
+                  child: Text('Add members'),
+                ),
+                const PopupMenuItem(
+                  value: 'add_task',
+                  child: Text('Add task'),
+                ),
+                const PopupMenuItem(
+                  value: 'edit_info',
+                  child: Text('Edit group'),
+                ),
+                const PopupMenuItem(
+                  value: 'delete_group',
+                  child: Text('Delete group'),
+                ),
+              ],
+            ),
+          ],
           bottom: const TabBar(
             tabs: [Tab(text: 'Members'), Tab(text: 'Tasks')],
           ),

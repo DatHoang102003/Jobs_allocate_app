@@ -68,25 +68,6 @@ class GroupsProvider with ChangeNotifier {
   }
 
   // ───────────────────────────────────────────────
-  // Update name / description of a group
-  // ───────────────────────────────────────────────
-  Future<void> updateGroupInfo({
-    required String id,
-    required String name,
-    required String description,
-  }) async {
-    try {
-      final data = await GroupService.updateGroup(id,
-          name: name, description: description);
-      final updated = Group.fromJson(data);
-      updateGroup(updated);
-    } catch (e) {
-      debugPrint('updateGroupInfo error: $e');
-      rethrow;
-    }
-  }
-
-  // ───────────────────────────────────────────────
   // Search groups by name
   // ───────────────────────────────────────────────
   Future<List<Group>> searchGroups(String keyword) async {
