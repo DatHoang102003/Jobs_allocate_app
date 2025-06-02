@@ -1,233 +1,169 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:task_manager_app/models/groups.dart';
-import 'package:task_manager_app/screens/Groups/groups_manager.dart';
-import 'package:task_manager_app/screens/Tasks/tasks_manager.dart';
+import 'tasks_manager.dart'; // Ensure correct path to TasksProvider
 
 class TaskScreen extends StatefulWidget {
-  static const routeName = '/task';
+  static const routeName = '/tasks';
   const TaskScreen({super.key});
 
   @override
   State<TaskScreen> createState() => _TaskScreenState();
 }
 
-class _TaskScreenState extends State<TaskScreen>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+class _TaskScreenState extends State<TaskScreen> {
+  String _selectedFilter = 'All';
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
-
-    // fetch once (if not yet loaded)
-    final tp = context.read<TasksProvider>();
-    if (tp.tasks.isEmpty) tp.fetchRecent();
-
-    final gp = context.read<GroupsProvider>();
-    if (gp.groups.isEmpty) gp.fetchGroups();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final taskProvider = Provider.of<TasksProvider>(context, listen: false);
+      taskProvider.loadTasksForToday(date: DateTime.now());
+    });
   }
 
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
-  }
-
-  /* ---------------- filter helpers ---------------- */
-  List<Map<String, dynamic>> _filter(
-      List<Map<String, dynamic>> all, String status) {
-    if (status == 'all') return all;
-    return all.where((t) => t['status'] == status).toList();
+  List<Map<String, dynamic>> _filterTasks(
+      List<Map<String, dynamic>> tasks, String filter) {
+    if (filter == 'All') return tasks;
+    return tasks.where((task) {
+      if (filter == 'In Progress') return task['status'] == 'doing';
+      if (filter == 'Completed') return task['status'] == 'done';
+      return false;
+    }).toList();
   }
 
   @override
   Widget build(BuildContext context) {
-    final tasksProv = context.watch<TasksProvider>();
-    final groupsProv = context.watch<GroupsProvider>();
-
-    final loading = tasksProv.isLoading || groupsProv.isLoading;
+    final taskProvider = Provider.of<TasksProvider>(context);
+    final filteredTasks = _filterTasks(taskProvider.tasks, _selectedFilter);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F6FA),
       appBar: AppBar(
+        title: const Text(
+          'Today\'s Tasks',
+          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black87),
+        ),
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text('Tasks', style: TextStyle(color: Colors.black)),
-        centerTitle: true,
-        bottom: TabBar(
-          controller: _tabController,
-          labelColor: Colors.deepPurple,
-          unselectedLabelColor: Colors.grey,
-          indicator: const UnderlineTabIndicator(
-            borderSide: BorderSide(width: 3.0, color: Colors.deepPurple),
-            insets: EdgeInsets.symmetric(horizontal: 16.0),
-          ),
-          tabs: const [
-            Tab(text: 'All tasks'),
-            Tab(text: 'In progress'),
-            Tab(text: 'Completed'),
-          ],
+        iconTheme: const IconThemeData(color: Colors.black87),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () {
+            Navigator.pop(context);
+          },
         ),
       ),
-      body: loading
-          ? const Center(child: CircularProgressIndicator())
-          : TabBarView(
-              controller: _tabController,
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                _buildTaskList(_filter(tasksProv.tasks, 'all'), groupsProv),
-                _buildTaskList(
-                    _filter(tasksProv.tasks, 'in_progress'), groupsProv),
-                _buildTaskList(
-                    _filter(tasksProv.tasks, 'completed'), groupsProv),
+                _buildChoiceChip('All'),
+                _buildChoiceChip('In Progress'),
+                _buildChoiceChip('Completed'),
               ],
             ),
-    );
-  }
-
-  /* ---------- list builder ---------- */
-  Widget _buildTaskList(
-      List<Map<String, dynamic>> tasks, GroupsProvider groupsProv) {
-    if (tasks.isEmpty) {
-      return const Center(child: Text('No tasks'));
-    }
-
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: tasks.length,
-      itemBuilder: (context, index) {
-        final t = tasks[index];
-
-        // safely look up the group (never returns null)
-        final groupModel = groupsProv.groups.firstWhere(
-          (gr) => gr.id == t['group'],
-          orElse: () => Group(
-            id: '',
-            name: 'Unknown',
-            description: '',
-            owner: '',
-            created: DateTime.now(),
-            updated: DateTime.now(),
           ),
-        );
-        final groupName = groupModel.name;
+          Expanded(
+            child: taskProvider.isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : filteredTasks.isEmpty
+                    ? Center(
+                        child: Text(
+                          _selectedFilter == 'All'
+                              ? 'No tasks for today'
+                              : 'No $_selectedFilter tasks',
+                        ),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.all(16),
+                        itemCount: filteredTasks.length,
+                        itemBuilder: (context, index) {
+                          final task = filteredTasks[index];
+                          final statusColor = task['status'] == 'done'
+                              ? Colors.green
+                              : task['status'] == 'doing'
+                                  ? Colors.orange
+                                  : Colors.grey;
 
-        return TaskCardUI(
-          title: t['title'],
-          description: t['description'] ?? '',
-          groupName: groupName,
-          deadline: DateTime.tryParse(t['deadline'] ?? ''),
-          status: t['status'],
-        );
-      },
+                          String createdDate = 'N/A';
+                          try {
+                            if (task['created'] != null) {
+                              final parsedDate =
+                                  DateTime.parse(task['created']);
+                              createdDate =
+                                  parsedDate.toLocal().toString().split(' ')[0];
+                            }
+                          } catch (_) {}
+
+                          return Card(
+                            elevation: 2,
+                            margin: const EdgeInsets.only(bottom: 8),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: ListTile(
+                              contentPadding: const EdgeInsets.all(12),
+                              title: Text(
+                                task['title'] ?? 'Untitled',
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Status: ${task['status'] ?? 'unknown'}',
+                                    style: TextStyle(
+                                      color: statusColor,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                  if (task['description'] != null)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 4),
+                                      child: Text(
+                                        task['description'],
+                                        style: const TextStyle(fontSize: 12),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                              trailing: Text(
+                                createdDate,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+          ),
+        ],
+      ),
     );
   }
-}
 
-/* ------------------------------------------------------------------
-   The TaskCardUI widget is identical to your original implementation
-------------------------------------------------------------------- */
-class TaskCardUI extends StatelessWidget {
-  final String title;
-  final String description;
-  final String groupName;
-  final DateTime? deadline;
-  final String status;
-
-  const TaskCardUI({
-    super.key,
-    required this.title,
-    required this.description,
-    required this.groupName,
-    this.deadline,
-    required this.status,
-  });
-
-  Color _statusColor(String status) {
-    switch (status) {
-      case 'in_progress':
-        return Colors.blue.shade100;
-      case 'completed':
-        return Colors.green.shade100;
-      case 'pending':
-      default:
-        return Colors.purple.shade100;
-    }
-  }
-
-  String _statusLabel(String status) {
-    switch (status) {
-      case 'in_progress':
-        return 'On going';
-      case 'completed':
-        return 'Completed';
-      case 'pending':
-      default:
-        return 'New task';
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          )
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title,
-              style:
-                  const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 6),
-          Text(description,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: Colors.black54)),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              const Icon(Icons.folder_copy_outlined,
-                  size: 16, color: Colors.grey),
-              const SizedBox(width: 6),
-              Text(groupName, style: const TextStyle(fontSize: 13)),
-              const SizedBox(width: 16),
-              const Icon(Icons.calendar_today, size: 16, color: Colors.grey),
-              const SizedBox(width: 6),
-              Text(
-                deadline != null
-                    ? "${deadline!.toLocal().toString().split(' ')[0]}"
-                    : "No deadline",
-                style: const TextStyle(fontSize: 13),
-              ),
-              const Spacer(),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: _statusColor(status),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  _statusLabel(status),
-                  style: const TextStyle(fontSize: 12),
-                ),
-              ),
-            ],
-          )
-        ],
-      ),
+  Widget _buildChoiceChip(String label) {
+    return ChoiceChip(
+      label: Text(label),
+      selected: _selectedFilter == label,
+      onSelected: (selected) {
+        if (selected) {
+          setState(() {
+            _selectedFilter = label;
+          });
+        }
+      },
+      selectedColor: Colors.deepPurple.withOpacity(0.2),
+      backgroundColor: Colors.grey.shade200,
     );
   }
 }

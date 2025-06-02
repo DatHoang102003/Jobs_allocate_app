@@ -101,3 +101,58 @@ export async function deleteTask(req, res) {
     return res.status(400).json({ error: err.message });
   }
 }
+/**
+ * GET /groups/:groupId/tasks/count
+ * Count number of tasks in a group (optionally filtered by status)
+ */
+export async function countTasksByGroup(req, res) {
+  const pbUser = req.pbUser;
+  const { groupId } = req.params;
+  const { status } = req.query;
+
+  try {
+    const filters = [`group="${groupId}"`];
+    if (status) filters.push(`status="${status}"`);
+
+    const filterString = filters.join(" && ");
+
+    const tasks = await pbUser.collection("tasks").getFullList({
+      filter: filterString,
+      fields: "id", // only fetch IDs for better performance
+    });
+
+    return res.json({ count: tasks.length });
+  } catch (err) {
+    console.error("countTasksByGroup error:", err.response?.data || err);
+    return res.status(400).json({ error: err.message });
+  }
+}
+/**
+ * GET /tasks/today
+ * Fetch all tasks for the authenticated user for the current day
+ */
+export async function getTasksForToday(req, res) {
+  const pbUser = req.pbUser;
+  const { date } = req.query; // Optional: YYYY-MM-DD format, defaults to today
+
+  try {
+    // Use the provided date or default to today (June 1, 2025, in this case)
+    const targetDate = date ? new Date(date) : new Date("2025-06-01T00:00:00Z");
+    const startOfDay = new Date(targetDate.setHours(0, 0, 0, 0)).toISOString();
+    const endOfDay = new Date(targetDate.setHours(23, 59, 59, 999)).toISOString();
+
+    // Filter tasks by the authenticated user and the date range
+    const filterString = `createdBy="${req.user.id}" && created >= "${startOfDay}" && created <= "${endOfDay}"`;
+
+    const tasks = await pbUser.collection("tasks").getFullList({
+      filter: filterString,
+      sort: "-created",
+    });
+
+    return res.json(tasks);
+  } catch (err) {
+    console.error("getTasksForToday error:", err.response?.data || err);
+    return res.status(400).json({ error: err.message });
+  }
+}
+

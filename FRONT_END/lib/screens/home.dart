@@ -7,6 +7,7 @@ import 'Groups/create_dialog.dart';
 import '../services/auth_service.dart';
 import '../services/user_service.dart';
 import 'Groups/groups_manager.dart';
+import 'Tasks/task.dart';
 import 'Tasks/tasks_manager.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -21,71 +22,46 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final gp = context.read<GroupsProvider>();
-      final tp = context.read<TasksProvider>();
-      if (gp.groups.isEmpty) gp.fetchGroups();
-      if (tp.tasks.isEmpty) tp.fetchRecent();
+      final taskProvider = Provider.of<TasksProvider>(context, listen: false);
+      final groupProvider = Provider.of<GroupsProvider>(context, listen: false);
+      taskProvider.loadTasksForToday(date: DateTime.now());
+      groupProvider.fetchGroups();
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    final groupsProv = context.watch<GroupsProvider>();
-    final tasksProv = context.watch<TasksProvider>();
+    final groupProvider = Provider.of<GroupsProvider>(context);
+    final taskProvider = Provider.of<TasksProvider>(context);
 
-    final loading = groupsProv.isLoading || tasksProv.isLoading;
-
-    /* ------------ UI ------------ */
     return Scaffold(
       backgroundColor: const Color(0xFFEDE8E6),
       drawer: const CustomDrawer(),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text('Home',
-            style:
-                TextStyle(fontWeight: FontWeight.bold, color: Colors.black87)),
+        title: const Text(
+          "Dashboard",
+          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black87),
+        ),
+        centerTitle: true,
         iconTheme: const IconThemeData(color: Colors.black87),
       ),
-      body: loading
+      body: taskProvider.isLoading || groupProvider.isLoading
           ? const Center(child: CircularProgressIndicator())
-          : SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _searchBox(),
-                    const SizedBox(height: 20),
-                    const Text('Your project',
-                        style: TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 12),
-                    groupsProv.groups.isEmpty
-                        ? const Text('Bạn chưa có nhóm nào')
-                        : ProjectCard(group: groupsProv.groups.first),
-                    const SizedBox(height: 20),
-                    const Text('Your recent tasks',
-                        style: TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 12),
-                    Expanded(
-                      child: tasksProv.tasks.isEmpty
-                          ? const Center(child: Text('Không có task gần đây'))
-                          : ListView.builder(
-                              itemCount: tasksProv.tasks.length,
-                              itemBuilder: (ctx, i) {
-                                final t = tasksProv.tasks[i];
-                                return TaskCard(
-                                  title: t['title'],
-                                  deadline:
-                                      DateTime.tryParse(t['deadline'] ?? ''),
-                                );
-                              },
-                            ),
-                    ),
-                  ],
-                ),
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _searchBox(),
+                  const SizedBox(height: 24),
+                  _buildTodayTaskCard(taskProvider),
+                  const SizedBox(height: 24),
+                  _buildInProgressSection(taskProvider),
+                  const SizedBox(height: 24),
+                  _buildGroupProgressSection(groupProvider, taskProvider),
+                ],
               ),
             ),
       floatingActionButton: ElevatedButton.icon(
@@ -109,7 +85,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  /* --- small extract for clarity --- */
   Widget _searchBox() => TextField(
         decoration: InputDecoration(
           hintText: "Search",
@@ -123,73 +98,191 @@ class _HomeScreenState extends State<HomeScreen> {
           filled: true,
         ),
       );
-}
 
-class ProjectCard extends StatelessWidget {
-  final Group group;
+  Widget _buildTodayTaskCard(TasksProvider provider) {
+    final tasks = provider.tasks;
+    final total = tasks.length;
+    final done = tasks.where((t) => t['status'] == 'done').length;
+    final percent = total == 0 ? 0 : ((done / total) * 100).round();
 
-  const ProjectCard({super.key, required this.group});
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.deepPurple,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  "Your today's task\nalmost done!",
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                ElevatedButton(
+                  onPressed: () {
+                    // Chuyển tới trang danh sách task hôm nay
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (context) => const TaskScreen()),
+                    );
+                  },
+                  child: const Text("View Task"),
+                ),
+              ],
+            ),
+          ),
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              SizedBox(
+                width: 60,
+                height: 60,
+                child: CircularProgressIndicator(
+                  value: percent / 100,
+                  color: Colors.white,
+                  backgroundColor: Colors.white24,
+                  strokeWidth: 6,
+                ),
+              ),
+              Text(
+                '$percent%',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
+  Widget _buildInProgressSection(TasksProvider provider) {
+    final inProgress =
+        provider.tasks.where((t) => t['status'] == 'doing').take(2).toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          "In Progress",
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: inProgress.map((task) => _buildTaskCard(task)).toList(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTaskCard(Map<String, dynamic> task) {
+    final title = task['title'] ?? 'Untitled';
+    final groupName = task['groupName'] ?? 'Unknown';
+    final progress = task['progress'] ?? 0.5;
+
+    return Expanded(
+      child: Container(
+        margin: const EdgeInsets.only(right: 12),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.blue.shade50,
+          borderRadius: BorderRadius.circular(12),
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(group.name,
-                style:
-                    const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                const Icon(Icons.calendar_today, size: 16, color: Colors.grey),
-                const SizedBox(width: 4),
-                Text(
-                  "Created: ${group.created.toLocal().toString().split(' ')[0]}",
-                  style: const TextStyle(fontSize: 12, color: Colors.grey),
-                ),
-                const Spacer(),
-              ],
-            ),
-            const SizedBox(height: 12),
             Text(
-              group.description,
-              style: const TextStyle(fontSize: 14),
+              groupName,
+              style: TextStyle(color: Colors.grey[700], fontSize: 12),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              title,
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            LinearProgressIndicator(
+              value: progress,
+              minHeight: 6,
+              backgroundColor: Colors.grey[300],
+              color: Colors.blue,
             ),
           ],
         ),
       ),
     );
   }
-}
 
-class TaskCard extends StatelessWidget {
-  final String title;
-  final DateTime? deadline;
+  Widget _buildGroupProgressSection(
+      GroupsProvider groupProvider, TasksProvider taskProvider) {
+    final groups = [
+      ...groupProvider.adminGroups,
+      ...groupProvider.memberGroups
+    ];
 
-  const TaskCard({
-    super.key,
-    required this.title,
-    this.deadline,
-  });
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          "Task Groups",
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 8),
+        Column(
+          children: groups.map((group) {
+            final groupTasks = taskProvider.tasks
+                .where((t) => t['groupId'] == group.id)
+                .toList();
+            final done = groupTasks.where((t) => t['status'] == 'done').length;
+            final percent = groupTasks.isEmpty
+                ? 0
+                : ((done / groupTasks.length) * 100).round();
 
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      child: ListTile(
-        leading: const Icon(Icons.task_outlined, color: Colors.deepPurple),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
-        subtitle:
-            Text("Deadline: ${deadline?.toLocal().toString().split(' ')[0]} "),
-        trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
-        onTap: () {},
-      ),
+            return ListTile(
+              contentPadding:
+                  const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
+              tileColor: Colors.grey.shade100,
+              leading: const Icon(Icons.folder, color: Colors.pink),
+              title: Text(group.name),
+              subtitle: Text('${groupTasks.length} Tasks'),
+              trailing: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    '$percent%',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.pink.shade400,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  SizedBox(
+                    width: 60,
+                    child: LinearProgressIndicator(
+                      value: percent / 100,
+                      backgroundColor: Colors.grey.shade300,
+                      color: Colors.pink,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+        ),
+      ],
     );
   }
 }
@@ -241,20 +334,26 @@ class CustomDrawer extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 10),
-                  Text(name,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.bold, color: Colors.black)),
-                  Text('$username',
-                      style: const TextStyle(color: Colors.black54)),
+                  Text(
+                    name,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black,
+                    ),
+                  ),
+                  Text(
+                    '$username',
+                    style: const TextStyle(color: Colors.black54),
+                  ),
                   TextButton(
-                      onPressed: () {}, child: const Text('Edit Profile')),
+                    onPressed: () {},
+                    child: const Text('Edit Profile'),
+                  ),
                   const Divider(),
                 ],
               );
             },
           ),
-
-          /* ------------- items below untouched ------------- */
           ListTile(
             leading: const Icon(Icons.home),
             title: const Text('Home'),
@@ -266,9 +365,9 @@ class CustomDrawer extends StatelessWidget {
           ListTile(
             leading: const Icon(Icons.group),
             title: const Text('Groups'),
-            onTap: () => {
-              Navigator.pop(context),
-              Navigator.pushNamed(context, '/groups')
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.pushNamed(context, '/groups');
             },
           ),
           ListTile(
@@ -307,7 +406,6 @@ class CustomDrawer extends StatelessWidget {
     );
   }
 
-  /* ---- helper returns {name, username, avatarUrl} or null on error ---- */
   Future<Map<String, dynamic>?> _drawerProfile() async {
     final data = await UserService.getDrawerProfile();
     return data;
