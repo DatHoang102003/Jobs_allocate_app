@@ -8,6 +8,8 @@ import {
   listAdminGroups,
   listMemberGroups,
   getGroupDetails,
+  updateGroup,
+  deleteGroup,
   searchGroups,
 } from "../controllers/group.controller.js";
 
@@ -122,24 +124,140 @@ router.get("/admin", requireAuth, listAdminGroups);
  */
 router.get("/member", requireAuth, listMemberGroups);
 
-/* ───────────────────── Get group details ─────────────────────── */
+/* ───────── Details / Update / Delete ───────── */
 /**
  * @swagger
  * /groups/{groupId}:
  *   get:
- *     summary: Get full details of a specific group
+ *     summary: Get full details of a group
  *     tags: [Groups]
- *     security: [ { bearerAuth: [] } ]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: groupId
  *         required: true
- *         schema: { type: string }
+ *         schema:
+ *           type: string
  *     responses:
- *       200: { description: Group object with members & tasks }
- *       400: { description: Invalid ID }
- *       401: { description: Unauthorized }
+ *       200:
+ *         description: Group object with members & tasks
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 group:
+ *                   type: object
+ *                   description: The group record (including all fields)
+ *                 members:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     description: Expanded membership objects (role + user info)
+ *                 tasks:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     description: Task objects belonging to this group
+ *       404:
+ *         description: Group deleted or not found
+ *
+ *   patch:
+ *     summary: Update a group (owner or admin)
+ *     tags: [Groups]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: groupId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 description: New group name
+ *               description:
+ *                 type: string
+ *                 description: New group description
+ *               isPublic:
+ *                 type: boolean
+ *                 description: Toggle group visibility (true = public, false = private)
+ *               deleted:
+ *                 type: boolean
+ *                 description: Set to true to soft-delete; set to false to restore
+ *     responses:
+ *       200:
+ *         description: Updated group object
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 collectionId:
+ *                   type: string
+ *                 collectionName:
+ *                   type: string
+ *                 id:
+ *                   type: string
+ *                 created:
+ *                   type: string
+ *                   format: date-time
+ *                 updated:
+ *                   type: string
+ *                   format: date-time
+ *                 name:
+ *                   type: string
+ *                 description:
+ *                   type: string
+ *                 owner:
+ *                   type: string
+ *                 isPublic:
+ *                   type: boolean
+ *                 deleted:
+ *                   type: boolean
+ *       400:
+ *         description: Validation error or malformed request
+ *       403:
+ *         description: Forbidden (only owner or admin)
+ *
+ *   delete:
+ *     summary: Soft-delete a group (sets deleted=true)
+ *     tags: [Groups]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: groupId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Group marked as deleted
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 ok:
+ *                   type: boolean
+ *                   example: true
+ *       403:
+ *         description: Forbidden (only owner or admin)
+ *       404:
+ *         description: Group not found or already deleted
  */
+
 router.get("/:groupId", requireAuth, getGroupDetails);
+router.patch("/:groupId", requireAuth, updateGroup);
+router.delete("/:groupId", requireAuth, deleteGroup);
 
 export default router;

@@ -1,94 +1,94 @@
+// controllers/group.controller.js
 import { pbAdmin } from "../services/pocketbase.js";
 
+/* ───────────────────────── Create ───────────────────────── */
 export async function createGroup(req, res) {
   const { name, description, members = [] } = req.body;
-  const isPublic = req.body.isPublic === false ? false : true;
-
-  const pbUser = req.pbUser;
+  const isPublic  = req.body.isPublic === false ? false : true;
+  const pbUser    = req.pbUser;
   const creatorId = req.user.id;
 
   if (!pbUser) {
-    return res.status(500).json({ error: "PocketBase user instance is not available" });
+    return res
+      .status(500)
+      .json({ error: "PocketBase user instance is not available" });
   }
 
   try {
-    // Tạo nhóm
     const group = await pbUser.collection("groups").create({
       name,
       description,
       owner: creatorId,
       isPublic,
+      deleted: false, // ← soft-delete flag (default false)
     });
 
-    // Thêm creator vào memberships với vai trò admin
+    // creator becomes admin
     await pbUser.collection("memberships").create({
-      user: creatorId,
+      user:  creatorId,
       group: group.id,
-      role: "admin",
+      role:  "admin",
     });
 
-    // Thêm các thành viên khác (nếu có)
-    const uniqueMemberIds = [...new Set(members)].filter((id) => id !== creatorId);
-
-    for (const userId of uniqueMemberIds) {
-      // Kiểm tra người dùng tồn tại
-      await pbUser.collection("users").getOne(userId); // sẽ throw nếu không hợp lệ
+    // add optional members
+    const uniqueIds = [...new Set(members)].filter((id) => id !== creatorId);
+    for (const uid of uniqueIds) {
+      await pbUser.collection("users").getOne(uid);   // throws if bad
       await pbUser.collection("memberships").create({
-        user: userId,
+        user:  uid,
         group: group.id,
-        role: "member",
+        role:  "member",
       });
     }
 
-    // Lấy danh sách thành viên (gồm cả thông tin mở rộng của user)
+    // fetch members (expanded)
     const groupMembers = await pbUser.collection("memberships").getFullList({
       filter: `group="${group.id}"`,
       expand: "user",
     });
 
-    // Trả về group cùng với danh sách thành viên
     return res.status(201).json({
       group,
-      members: groupMembers.map(member => ({
-        id: member.id,
-        userId: member.user,
-        role: member.role,
-        user: member.expand?.user || null
-      }))
+      members: groupMembers.map((m) => ({
+        id:     m.id,
+        userId: m.user,
+        role:   m.role,
+        user:   m.expand?.user ?? null,
+      })),
     });
-
   } catch (err) {
     console.error("createGroup error:", err.response?.data || err);
     return res.status(400).json({
-      error: err?.response?.data?.message || err.message || "Unknown error"
+      error: err?.response?.data?.message || err.message || "Unknown error",
     });
   }
 }
 
-
-
+/* ───────────────────────── List mine ─────────────────────── */
 export async function listGroups(req, res) {
   const pbUser = req.pbUser;
 
   try {
-    const mships = await pbUser
-      .collection("memberships")
-      .getFullList({ filter: `user="${req.user.id}"` });
-    const owned = await pbUser
-      .collection("groups")
-      .getFullList({ filter: `owner="${req.user.id}"` });
+    const myMemberships = await pbUser.collection("memberships").getFullList({
+      filter: `user="${req.user.id}"`,
+    });
+    const ownedGroups   = await pbUser.collection("groups").getFullList({
+      filter: `owner="${req.user.id}"`,
+    });
 
-    const allIds = Array.from(
-      new Set([...mships.map((m) => m.group), ...owned.map((g) => g.id)])
-    );
+    const allIds = new Set([
+      ...myMemberships.map((m) => m.group),
+      ...ownedGroups.map((g) => g.id),
+    ]);
 
-    if (allIds.length === 0) return res.json([]);
+    if (allIds.size === 0) return res.json([]);
 
-    const orFilter = allIds.map((id) => `id="${id}"`).join(" || ");
+    const orFilter = [...allIds].map((id) => `id="${id}"`).join(" || ");
 
-    const groups = await pbUser
-      .collection("groups")
-      .getFullList({ filter: `(${orFilter})`, sort: "-created" });
+    const groups = await pbUser.collection("groups").getFullList({
+      filter: `(${orFilter}) && deleted=false`,
+      sort:   "-created",
+    });
 
     return res.json(groups);
   } catch (err) {
@@ -96,11 +96,13 @@ export async function listGroups(req, res) {
     return res.status(400).json({ error: err.message || "Fetch failed" });
   }
 }
-export async function listPublicGroups(req, res) {
+
+/* ─────────────────────── Public browse ───────────────────── */
+export async function listPublicGroups(_req, res) {
   try {
     const groups = await pbAdmin.collection("groups").getFullList({
-      filter: "isPublic=true",
-      sort: "-created",
+      filter: "isPublic=true && deleted=false",
+      sort:   "-created",
     });
     res.json(groups);
   } catch (err) {
@@ -109,22 +111,24 @@ export async function listPublicGroups(req, res) {
   }
 }
 
+/* ───────────────────────── Details ───────────────────────── */
 export async function getGroupDetails(req, res) {
-  const pbUser = req.pbUser;
+  const pbUser  = req.pbUser;
   const groupId = req.params.groupId;
 
   try {
     const group = await pbUser.collection("groups").getOne(groupId);
+    if (group.deleted) return res.status(404).json({ error: "Group deleted" });
 
     const members = await pbUser.collection("memberships").getFullList({
       filter: `group="${groupId}"`,
       expand: "user",
-      sort: "created",
+      sort:   "created",
     });
 
     const tasks = await pbUser.collection("tasks").getFullList({
       filter: `group="${groupId}"`,
-      sort: "-created",
+      sort:   "-created",
     });
 
     res.json({ group, members, tasks });
@@ -134,83 +138,116 @@ export async function getGroupDetails(req, res) {
   }
 }
 
+/* ───────────────────────── Search ───────────────────────── */
 export async function searchGroups(req, res) {
-  const pbUser = req.pbUser;
+  const pbUser  = req.pbUser;
   const keyword = req.query.q?.trim();
-
   if (!keyword) {
-    return res.status(400).json({ error: "Missing search keyword in query parameter 'q'" });
+    return res.status(400).json({ error: "Missing query parameter 'q'" });
   }
 
   try {
     const groups = await pbUser.collection("groups").getFullList({
-      filter: `name~"${keyword}"`, 
-      sort: "-created",
+      filter: `name~"${keyword}" && deleted=false`,
+      sort:   "-created",
     });
-
-    return res.json(groups);
+    res.json(groups);
   } catch (err) {
     console.error("searchGroups error:", err.response?.data || err);
-    return res.status(400).json({ error: err.message || "Search failed" });
+    res.status(400).json({ error: err.message || "Search failed" });
   }
 }
 
-/**
- * GET /groups/admin
- * List all groups where the current user has the "admin" role
- */
+/* ───────────────── Admin / Member lists ─────────────────── */
 export async function listAdminGroups(req, res) {
   const pbUser = req.pbUser;
   const userId = req.user.id;
 
   try {
-    // fetch memberships where role="admin"
-    const mships = await pbUser
-      .collection("memberships")
-      .getFullList({
-        filter: `user="${userId}" && role="admin"`,
-        expand: "group",
-        sort: "-created",
-      });
-
-    // extract the expanded group records
-    const groups = mships
-      .map((m) => m.expand?.group)
-      .filter((g) => g); 
-
-    return res.json(groups);
+    const ms = await pbUser.collection("memberships").getFullList({
+      filter: `user="${userId}" && role="admin"`,
+      expand: "group",
+      sort:   "-created",
+    });
+    res.json(ms.map((m) => m.expand?.group).filter(Boolean));
   } catch (err) {
     console.error("listAdminGroups error:", err.response?.data || err);
-    return res.status(400).json({ error: err.message });
+    res.status(400).json({ error: err.message });
   }
 }
 
-/**
- * GET /groups/member
- * List all groups where the current user has the "member" role
- */
 export async function listMemberGroups(req, res) {
   const pbUser = req.pbUser;
   const userId = req.user.id;
 
   try {
-    // fetch memberships where role="member"
-    const mships = await pbUser
-      .collection("memberships")
-      .getFullList({
-        filter: `user="${userId}" && role="member"`,
-        expand: "group",
-        sort: "-created",
-      });
-
-    const groups = mships
-      .map((m) => m.expand?.group)
-      .filter((g) => g);
-
-    return res.json(groups);
+    const ms = await pbUser.collection("memberships").getFullList({
+      filter: `user="${userId}" && role="member"`,
+      expand: "group",
+      sort:   "-created",
+    });
+    res.json(ms.map((m) => m.expand?.group).filter(Boolean));
   } catch (err) {
     console.error("listMemberGroups error:", err.response?.data || err);
-    return res.status(400).json({ error: err.message });
+    res.status(400).json({ error: err.message });
   }
 }
 
+/* ───────────────────────── Update ───────────────────────── */
+export async function updateGroup(req, res) {
+  const pbUser  = req.pbUser;
+  const userId  = req.user.id;
+  const groupId = req.params.groupId;
+  const { name, description, isPublic, deleted } = req.body || {};
+
+  try {
+    const group = await pbUser.collection("groups").getOne(groupId);
+
+    let isAdminMember = false;
+    if (group.owner !== userId) {
+      const ms = await pbUser
+        .collection("memberships")
+        .getFirstListItem(`group="${groupId}" && user="${userId}"`);
+      isAdminMember = ms?.role === "admin";
+      if (!isAdminMember) return res.status(403).json({ error: "Forbidden" });
+    }
+
+    const updated = await pbUser.collection("groups").update(groupId, {
+      ...(name        != null && { name }),
+      ...(description != null && { description }),
+      ...(isPublic    != null && { isPublic }),
+      ...(deleted     != null && { deleted }),
+    });
+
+    res.json(updated);
+  } catch (err) {
+    console.error("updateGroup error:", err.response?.data || err);
+    res.status(err?.status || 400).json({ error: err.message });
+  }
+}
+
+/* ─────────────────────── Soft-delete ─────────────────────── */
+export async function deleteGroup(req, res) {
+  const pbUser  = req.pbUser;
+  const userId  = req.user.id;
+  const groupId = req.params.groupId;
+
+  try {
+    const group = await pbUser.collection("groups").getOne(groupId);
+
+    let isAdminMember = false;
+    if (group.owner !== userId) {
+      const ms = await pbUser
+        .collection("memberships")
+        .getFirstListItem(`group="${groupId}" && user="${userId}"`);
+      isAdminMember = ms?.role === "admin";
+      if (!isAdminMember) return res.status(403).json({ error: "Forbidden" });
+    }
+
+    await pbUser.collection("groups").update(groupId, { deleted: true });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("deleteGroup error:", err.response?.data || err);
+    res.status(err?.status || 400).json({ error: err.message });
+  }
+}
