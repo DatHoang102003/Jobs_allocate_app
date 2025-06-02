@@ -244,10 +244,10 @@ Widget _buildGroupCard(
   );
 }
 
-/// Helper để fetch cả 2 count: tổng số task và số task có status 'doing'
+/// Helper để fetch cả 2 count: tổng số task và số task có status 'done'
 Future<List<int>> _getTaskCounts(String groupId) async {
   final total = await TaskService.countTasks(groupId);
-  final todo = await TaskService.countTasks(groupId, status: 'doing');
+  final todo = await TaskService.countTasks(groupId, status: 'done');
   return [total, todo];
 }
 
