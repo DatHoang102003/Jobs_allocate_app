@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:task_manager_app/screens/Tasks/create_task.dart';
 import 'package:task_manager_app/services/group_service.dart';
 import 'package:task_manager_app/services/membership_service.dart';
@@ -32,7 +33,6 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
     await _fetch();
   }
 
-  /* ───────── fetch data ───────── */
   Future<void> _fetch() async {
     try {
       final gDetail = await GroupService.getGroupDetail(widget.groupId);
@@ -54,7 +54,6 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
     }
   }
 
-  /* ───────── add-task dialog ───────── */
   Future<void> _openCreateTaskDialog() async {
     final created = await showDialog<bool>(
       context: context,
@@ -65,7 +64,11 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
 
   @override
   Widget build(BuildContext context) {
-    /* loading / error states */
+    // Lấy userId từ AuthService (có thể thay bằng Provider nếu dùng AuthManager)
+    final current = AuthService.currentUserId;
+    // Nếu bạn dùng Provider:
+    // final current = Provider.of<AuthManager>(context).userId;
+
     if (_loading) {
       return const Scaffold(
         body: Center(child: CircularProgressIndicator()),
@@ -77,39 +80,29 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
       );
     }
 
-    /* ── de-structure ── */
     final g = detail!['group'] as Map<String, dynamic>;
     final membersAll = detail!['members'] as List<dynamic>;
     final tasks = detail!['tasks'] as List<dynamic>;
 
     final ownerId = g['owner'] as String;
-    final current = AuthService.currentUserId; // now cached
 
-    /* split admins vs members */
     final admins = membersAll
-        .where(
-          (m) => (m['role'] as String? ?? 'member') == 'admin',
-        )
+        .where((m) => (m['role'] as String? ?? 'member') == 'admin')
         .toList();
     final members = membersAll.where((m) => !admins.contains(m)).toList();
 
-    /* permission: owner OR admin membership */
     final bool canManage = ownerId == current ||
-        membersAll.any(
-          (m) =>
-              (m['role'] == 'admin') &&
-              ((m['user'] == current) ||
-                  (m['expand']?['user']?['id'] == current)),
-        );
+        membersAll.any((m) =>
+            (m['role'] == 'admin') &&
+            ((m['user'] == current) ||
+                (m['expand']?['user']?['id'] == current)));
 
-    /* map id → name for TasksTab */
     final idToName = {
       for (var m in membersAll)
         ((m['expand']?['user']?['id']) ?? m['user']) as String:
             (m['expand']?['user']?['name'] as String? ?? 'Unnamed'),
     };
 
-    /* ── UI ── */
     return DefaultTabController(
       length: 2,
       child: Scaffold(
@@ -136,7 +129,11 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
               canManage: canManage,
               onRefresh: _fetch,
             ),
-            TasksTab(tasks: tasks, idToName: idToName),
+            TasksTab(
+              currentUserId: current,
+              groupId: widget.groupId,
+              idToName: idToName,
+            ),
           ],
         ),
       ),

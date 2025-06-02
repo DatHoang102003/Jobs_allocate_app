@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../models/groups.dart';
 import 'Auth/account.dart';
 import 'Auth/login.dart';
+import 'Groups/Group_detail/group_detail.dart';
 import 'Groups/create_dialog.dart';
 import '../services/auth_service.dart';
 import '../services/user_service.dart';
@@ -18,6 +19,11 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
+
+  List<Group> _searchResults = [];
+
   @override
   void initState() {
     super.initState();
@@ -27,6 +33,28 @@ class _HomeScreenState extends State<HomeScreen> {
       taskProvider.loadTasksForToday(date: DateTime.now());
       groupProvider.fetchGroups();
     });
+  }
+
+  Future<void> _handleSearch(String keyword) async {
+    if (keyword.trim().isEmpty) {
+      setState(() => _searchResults = []);
+      return;
+    }
+
+    try {
+      final groupProvider = Provider.of<GroupsProvider>(context, listen: false);
+      final results = await groupProvider.searchGroups(keyword);
+      setState(() => _searchResults = results);
+    } catch (e) {
+      debugPrint("Search failed: $e");
+    }
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _searchFocusNode.dispose();
+    super.dispose();
   }
 
   @override
@@ -55,6 +83,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _searchBox(),
+                  const SizedBox(height: 16),
+                  if (_searchResults.isNotEmpty) _buildSearchResultsCard(),
                   const SizedBox(height: 24),
                   _buildTodayTaskCard(taskProvider),
                   const SizedBox(height: 24),
@@ -85,19 +115,61 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _searchBox() => TextField(
-        decoration: InputDecoration(
-          hintText: "Search",
-          prefixIcon: const Icon(Icons.search),
-          suffixIcon: const Icon(Icons.tune),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide.none,
-          ),
-          fillColor: Colors.white,
-          filled: true,
+  Widget _searchBox() {
+    return TextField(
+      controller: _searchController,
+      focusNode: _searchFocusNode,
+      onChanged: _handleSearch,
+      decoration: InputDecoration(
+        hintText: "Search group...",
+        prefixIcon: const Icon(Icons.search),
+        suffixIcon: IconButton(
+          icon: const Icon(Icons.clear),
+          onPressed: () {
+            _searchController.clear();
+            setState(() => _searchResults = []);
+          },
         ),
-      );
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide.none,
+        ),
+        fillColor: Colors.white,
+        filled: true,
+      ),
+    );
+  }
+
+  Widget _buildSearchResultsCard() {
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: ListView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: _searchResults.length,
+        itemBuilder: (context, index) {
+          final group = _searchResults[index];
+          return ListTile(
+            title: Text(group.name),
+            subtitle: Text(group.description ?? ""),
+            onTap: () {
+              Provider.of<GroupsProvider>(context, listen: false)
+                  .setCurrent(group);
+              _searchController.clear();
+              setState(() => _searchResults = []);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => GroupDetailScreen(groupId: group.id),
+                ),
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
 
   Widget _buildTodayTaskCard(TasksProvider provider) {
     final tasks = provider.tasks;
@@ -169,7 +241,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildInProgressSection(TasksProvider provider) {
     final inProgress =
-        provider.tasks.where((t) => t['status'] == 'doing').take(2).toList();
+        provider.tasks.where((t) => t['status'] == 'todo').take(2).toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -239,17 +311,19 @@ class _HomeScreenState extends State<HomeScreen> {
           style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 8),
-        Column(
-          children: groups.map((group) {
-            final groupTasks = taskProvider.tasks
-                .where((t) => t['groupId'] == group.id)
-                .toList();
-            final done = groupTasks.where((t) => t['status'] == 'done').length;
-            final percent = groupTasks.isEmpty
-                ? 0
-                : ((done / groupTasks.length) * 100).round();
+        ...groups.map((group) {
+          final groupTasks = taskProvider.tasks
+              .where((t) => t['groupId'] == group.id)
+              .toList();
+          final done = groupTasks.where((t) => t['status'] == 'done').length;
+          final percent = groupTasks.isEmpty
+              ? 0
+              : ((done / groupTasks.length) * 100).round();
 
-            return ListTile(
+          return Padding(
+            padding:
+                const EdgeInsets.symmetric(vertical: 6), // 👈 Thêm khoảng cách
+            child: ListTile(
               contentPadding:
                   const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
               shape: RoundedRectangleBorder(
@@ -279,9 +353,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ],
               ),
-            );
-          }).toList(),
-        ),
+            ),
+          );
+        }).toList(),
       ],
     );
   }

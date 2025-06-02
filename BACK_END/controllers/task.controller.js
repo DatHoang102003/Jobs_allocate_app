@@ -10,7 +10,7 @@ export async function createTask(req, res) {
       title,
       description,
       assignee, // may be undefined
-      status: "todo",
+      status: "pending",
       deadline, // ISO or omit
       createdBy: req.user.id,
     });
