@@ -4,8 +4,8 @@ import { pbAdmin } from "../services/pocketbase.js";
 /* ───────────────────────── Create ───────────────────────── */
 export async function createGroup(req, res) {
   const { name, description, members = [] } = req.body;
-  const isPublic  = req.body.isPublic === false ? false : true;
-  const pbUser    = req.pbUser;
+  const isPublic = req.body.isPublic === false ? false : true;
+  const pbUser = req.pbUser;
   const creatorId = req.user.id;
 
   if (!pbUser) {
@@ -25,19 +25,19 @@ export async function createGroup(req, res) {
 
     // creator becomes admin
     await pbUser.collection("memberships").create({
-      user:  creatorId,
+      user: creatorId,
       group: group.id,
-      role:  "admin",
+      role: "admin",
     });
 
     // add optional members
     const uniqueIds = [...new Set(members)].filter((id) => id !== creatorId);
     for (const uid of uniqueIds) {
-      await pbUser.collection("users").getOne(uid);   // throws if bad
+      await pbUser.collection("users").getOne(uid); // throws if bad
       await pbUser.collection("memberships").create({
-        user:  uid,
+        user: uid,
         group: group.id,
-        role:  "member",
+        role: "member",
       });
     }
 
@@ -50,10 +50,10 @@ export async function createGroup(req, res) {
     return res.status(201).json({
       group,
       members: groupMembers.map((m) => ({
-        id:     m.id,
+        id: m.id,
         userId: m.user,
-        role:   m.role,
-        user:   m.expand?.user ?? null,
+        role: m.role,
+        user: m.expand?.user ?? null,
       })),
     });
   } catch (err) {
@@ -72,7 +72,7 @@ export async function listGroups(req, res) {
     const myMemberships = await pbUser.collection("memberships").getFullList({
       filter: `user="${req.user.id}"`,
     });
-    const ownedGroups   = await pbUser.collection("groups").getFullList({
+    const ownedGroups = await pbUser.collection("groups").getFullList({
       filter: `owner="${req.user.id}"`,
     });
 
@@ -87,7 +87,7 @@ export async function listGroups(req, res) {
 
     const groups = await pbUser.collection("groups").getFullList({
       filter: `(${orFilter}) && deleted=false`,
-      sort:   "-created",
+      sort: "-created",
     });
 
     return res.json(groups);
@@ -102,7 +102,7 @@ export async function listPublicGroups(_req, res) {
   try {
     const groups = await pbAdmin.collection("groups").getFullList({
       filter: "isPublic=true && deleted=false",
-      sort:   "-created",
+      sort: "-created",
     });
     res.json(groups);
   } catch (err) {
@@ -113,7 +113,7 @@ export async function listPublicGroups(_req, res) {
 
 /* ───────────────────────── Details ───────────────────────── */
 export async function getGroupDetails(req, res) {
-  const pbUser  = req.pbUser;
+  const pbUser = req.pbUser;
   const groupId = req.params.groupId;
 
   try {
@@ -123,12 +123,12 @@ export async function getGroupDetails(req, res) {
     const members = await pbUser.collection("memberships").getFullList({
       filter: `group="${groupId}"`,
       expand: "user",
-      sort:   "created",
+      sort: "created",
     });
 
     const tasks = await pbUser.collection("tasks").getFullList({
       filter: `group="${groupId}"`,
-      sort:   "-created",
+      sort: "-created",
     });
 
     res.json({ group, members, tasks });
@@ -140,24 +140,24 @@ export async function getGroupDetails(req, res) {
 
 /* ───────────────────────── Search ───────────────────────── */
 export async function searchGroups(req, res) {
-  const pbUser  = req.pbUser;
   const keyword = req.query.q?.trim();
   if (!keyword) {
     return res.status(400).json({ error: "Missing query parameter 'q'" });
   }
 
   try {
-    const groups = await pbUser.collection("groups").getFullList({
+    // use pbAdmin so we ignore collection read-rules
+    const groups = await pbAdmin.collection("groups").getFullList({
       filter: `name~"${keyword}" && deleted=false`,
-      sort:   "-created",
+      sort: "-created",
     });
-    res.json(groups);
+
+    return res.json(groups);
   } catch (err) {
     console.error("searchGroups error:", err.response?.data || err);
-    res.status(400).json({ error: err.message || "Search failed" });
+    return res.status(400).json({ error: err.message || "Search failed" });
   }
 }
-
 /* ───────────────── Admin / Member lists ─────────────────── */
 export async function listAdminGroups(req, res) {
   const pbUser = req.pbUser;
@@ -167,9 +167,11 @@ export async function listAdminGroups(req, res) {
     const ms = await pbUser.collection("memberships").getFullList({
       filter: `user="${userId}" && role="admin"`,
       expand: "group",
-      sort:   "-created",
+      sort: "-created",
     });
-    res.json(ms.map((m) => m.expand?.group).filter(Boolean));
+    res.json(
+      ms.map((m) => m.expand?.group).filter((g) => g && g.deleted !== true) // only keep not-deleted
+    );
   } catch (err) {
     console.error("listAdminGroups error:", err.response?.data || err);
     res.status(400).json({ error: err.message });
@@ -184,9 +186,11 @@ export async function listMemberGroups(req, res) {
     const ms = await pbUser.collection("memberships").getFullList({
       filter: `user="${userId}" && role="member"`,
       expand: "group",
-      sort:   "-created",
+      sort: "-created",
     });
-    res.json(ms.map((m) => m.expand?.group).filter(Boolean));
+    +res.json(
+      ms.map((m) => m.expand?.group).filter((g) => g && g.deleted !== true)
+    );
   } catch (err) {
     console.error("listMemberGroups error:", err.response?.data || err);
     res.status(400).json({ error: err.message });
@@ -195,8 +199,8 @@ export async function listMemberGroups(req, res) {
 
 /* ───────────────────────── Update ───────────────────────── */
 export async function updateGroup(req, res) {
-  const pbUser  = req.pbUser;
-  const userId  = req.user.id;
+  const pbUser = req.pbUser;
+  const userId = req.user.id;
   const groupId = req.params.groupId;
   const { name, description, isPublic, deleted } = req.body || {};
 
@@ -213,10 +217,10 @@ export async function updateGroup(req, res) {
     }
 
     const updated = await pbUser.collection("groups").update(groupId, {
-      ...(name        != null && { name }),
+      ...(name != null && { name }),
       ...(description != null && { description }),
-      ...(isPublic    != null && { isPublic }),
-      ...(deleted     != null && { deleted }),
+      ...(isPublic != null && { isPublic }),
+      ...(deleted != null && { deleted }),
     });
 
     res.json(updated);
@@ -228,8 +232,8 @@ export async function updateGroup(req, res) {
 
 /* ─────────────────────── Soft-delete ─────────────────────── */
 export async function deleteGroup(req, res) {
-  const pbUser  = req.pbUser;
-  const userId  = req.user.id;
+  const pbUser = req.pbUser;
+  const userId = req.user.id;
   const groupId = req.params.groupId;
 
   try {
