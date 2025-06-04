@@ -45,27 +45,50 @@ Future<void> showEditGroupDialog(
             onPressed: () => Navigator.of(context).pop(),
             child: const Text('Cancel'),
           ),
-          // ElevatedButton(
-          //   // onPressed: () async {
-          //   //   try {
-          //   //     // Access GroupsProvider to call updateGroupInfo
-          //   //     await Provider.of<GroupsProvider>(context, listen: false)
-          //   //         .updateGroupInfo(
-          //   //       id: group.id,
-          //   //       name: nameController.text,
-          //   //       description: descriptionController.text,
-          //   //     );
-          //   //     Navigator.of(context).pop();
-          //   //   } catch (e) {
-          //   //     // Show error message
-          //   //     ScaffoldMessenger.of(context).showSnackBar(
-          //   //       SnackBar(content: Text('Failed to update group: $e')),
-          //   //     );
-          //   //   }
-          //   // },
-          //   style: ElevatedButton.styleFrom(backgroundColor: Colors.deepPurple),
-          //   child: const Text('Save'),
-          // ),
+          ElevatedButton(
+            onPressed: () async {
+              try {
+                // Validate group name
+                if (nameController.text.trim().isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Group name cannot be empty')),
+                  );
+                  return;
+                }
+
+                // Update group using GroupsProvider
+                await Provider.of<GroupsProvider>(context, listen: false)
+                    .updateGroup(
+                  groupId: group.id,
+                  name: nameController.text.trim(),
+                  description: descriptionController.text.trim(),
+                );
+
+                // Create updated group object for callback
+                final updatedGroup = Group(
+                  id: group.id,
+                  name: nameController.text.trim(),
+                  description: descriptionController.text.trim(),
+                  owner: group.owner, // Preserve existing owner
+                  created: group.created, // Preserve existing created date
+                  updated: DateTime.now(), // Update timestamp
+                );
+
+                // Call the callback function
+                onGroupEdited(updatedGroup);
+
+                // Close dialog
+                Navigator.of(context).pop();
+              } catch (e) {
+                // Show error message
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Failed to update group: $e')),
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.deepPurple),
+            child: const Text('Save'),
+          ),
         ],
       );
     },

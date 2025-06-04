@@ -93,12 +93,20 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
     });
   }
 
-  // Placeholder for Delete Group functionality
+  // Soft-delete a group
   Future<void> _deleteGroup() async {
-    // Implement your delete group logic here
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Delete Group functionality coming soon!')),
-    );
+    try {
+      await Provider.of<GroupsProvider>(context, listen: false)
+          .deleteGroup(widget.groupId);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Group deleted successfully')),
+      );
+      Navigator.of(context).pop(); // Navigate back after deletion
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to delete group: $e')),
+      );
+    }
   }
 
   @override
@@ -121,8 +129,6 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
 
     final g = detail!['group'] as Map<String, dynamic>;
     final membersAll = detail!['members'] as List<dynamic>;
-    final tasks = detail!['tasks'] as List<dynamic>;
-
     final ownerId = g['owner'] as String;
 
     final admins = membersAll

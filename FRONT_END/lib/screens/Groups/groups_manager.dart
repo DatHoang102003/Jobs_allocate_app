@@ -93,16 +93,45 @@ class GroupsProvider with ChangeNotifier {
     }
   }
 
-  // ───────────────────────────────────────────────
-  // Refresh current group data
-  // ───────────────────────────────────────────────
-  Future<void> refreshCurrentGroup() async {
-    if (_current == null) return;
+// ───────────────────────────────────────────────
+// Update a group's details
+// ───────────────────────────────────────────────
+  Future<void> updateGroup({
+    required String groupId,
+    String? name,
+    String? description,
+    bool? isPublic,
+  }) async {
     try {
-      final updated = await fetchGroupDetail(_current!.id);
-      updateGroup(updated);
+      final data = await GroupService.updateGroup(
+        groupId: groupId,
+        name: name,
+        description: description,
+        isPublic: isPublic,
+      );
+      final updatedGroup = Group.fromJson(data);
+
+      // Update the group in adminGroups or memberGroups
+      bool updated = false;
+      for (var list in [_adminGroups, _memberGroups]) {
+        final index = list.indexWhere((g) => g.id == groupId);
+        if (index != -1) {
+          list[index] = updatedGroup;
+          updated = true;
+        }
+      }
+
+      // Update current group if it matches the updated group
+      if (_current?.id == groupId) {
+        _current = updatedGroup;
+      }
+
+      if (updated) {
+        notifyListeners();
+      }
     } catch (e) {
-      debugPrint('refreshCurrentGroup error: $e');
+      debugPrint('updateGroup error: $e');
+      rethrow;
     }
   }
 
@@ -115,22 +144,32 @@ class GroupsProvider with ChangeNotifier {
   }
 
   // ───────────────────────────────────────────────
-  // Update group in admin/member list
+  // Soft-delete a group
   // ───────────────────────────────────────────────
-  void updateGroup(Group updated) {
-    bool updatedAny = false;
-
-    for (var list in [_adminGroups, _memberGroups]) {
-      final i = list.indexWhere((g) => g.id == updated.id);
-      if (i != -1) {
-        list[i] = updated;
-        updatedAny = true;
+  Future<void> deleteGroup(String groupId) async {
+    try {
+      await GroupService.deleteGroup(groupId);
+      // Remove from admin or member groups
+      bool removed = false;
+      for (var list in [_adminGroups, _memberGroups]) {
+        final i = list.indexWhere((g) => g.id == groupId);
+        if (i != -1) {
+          list.removeAt(i);
+          removed = true;
+        }
       }
-    }
-
-    if (updatedAny && _current?.id == updated.id) {
-      _current = updated;
-      notifyListeners();
+      // Clear current group if it was the deleted one
+      if (_current?.id == groupId) {
+        _current = _adminGroups.isNotEmpty
+            ? _adminGroups.first
+            : (_memberGroups.isNotEmpty ? _memberGroups.first : null);
+      }
+      if (removed) {
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('deleteGroup error: $e');
+      rethrow;
     }
   }
 }

@@ -148,7 +148,7 @@ export async function searchGroups(req, res) {
   try {
     // use pbAdmin so we ignore collection read-rules
     const groups = await pbAdmin.collection("groups").getFullList({
-      filter: `name~"${keyword}" && deleted=false`,
+      filter: `name~"${keyword}"`,
       sort: "-created",
     });
 

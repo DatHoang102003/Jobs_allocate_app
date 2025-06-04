@@ -66,8 +66,8 @@ class GroupService {
   }
 
   /* -------------------------------------------------
-   Create a new group
-------------------------------------------------- */
+     Create a new group
+  ------------------------------------------------- */
   static Future<Map<String, dynamic>> createGroup({
     required String name,
     String description = '',
@@ -94,8 +94,8 @@ class GroupService {
   }
 
   /* -------------------------------------------------
-   Search groups I own or am a member of by name
-------------------------------------------------- */
+     Search groups I own or am a member of by name
+  ------------------------------------------------- */
   static Future<List<dynamic>> searchGroups(String keyword) async {
     if (keyword.trim().isEmpty) {
       throw Exception("Search keyword cannot be empty");
@@ -146,5 +146,56 @@ class GroupService {
     }
 
     return jsonDecode(res.body) as List<dynamic>;
+  }
+
+  /* -------------------------------------------------
+     Update a group
+  ------------------------------------------------- */
+  static Future<Map<String, dynamic>> updateGroup({
+    required String groupId,
+    String? name,
+    String? description,
+    bool? isPublic,
+    bool? deleted,
+  }) async {
+    final body = jsonEncode({
+      if (name != null) 'name': name,
+      if (description != null) 'description': description,
+      if (isPublic != null) 'isPublic': isPublic,
+      if (deleted != null) 'deleted': deleted,
+    });
+
+    final res = await http.patch(
+      Uri.parse('$_base/groups/$groupId'),
+      headers: await _headers(),
+      body: body,
+    );
+
+    if (res.statusCode != 200) {
+      throw Exception(
+          jsonDecode(res.body)['error'] ?? 'Failed to update group');
+    }
+
+    final data = jsonDecode(res.body);
+    print("✅ Updated group: $data");
+
+    return data;
+  }
+
+  /* -------------------------------------------------
+     Soft-delete a group
+  ------------------------------------------------- */
+  static Future<void> deleteGroup(String groupId) async {
+    final res = await http.delete(
+      Uri.parse('$_base/groups/$groupId'),
+      headers: await _headers(),
+    );
+
+    if (res.statusCode != 200) {
+      throw Exception(
+          jsonDecode(res.body)['error'] ?? 'Failed to delete group');
+    }
+
+    print("✅ Soft-deleted group: $groupId");
   }
 }
