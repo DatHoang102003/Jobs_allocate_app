@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import '../../services/join_service.dart';
 
 class JoinManager with ChangeNotifier {
@@ -6,12 +7,22 @@ class JoinManager with ChangeNotifier {
   String? error;
   List<dynamic> joinRequests = [];
 
-  /// Fetch danh sách các join request đã gửi bởi user hiện tại
+  /* ─────────────────────────────────────────────
+     PUBLIC HELPERS
+  ───────────────────────────────────────────── */
+
+  /// Returns `true` if I already have a *pending* request for this group.
+  bool isPending(String groupId) => joinRequests
+      .any((jr) => jr['group'] == groupId && jr['status'] == 'pending');
+
+  /* ─────────────────────────────────────────────
+     CRUD
+  ───────────────────────────────────────────── */
+
   Future<void> fetchJoinRequests() async {
     _setLoading(true);
     try {
-      final data = await JoinService.listJoinRequests();
-      joinRequests = data;
+      joinRequests = await JoinService.listJoinRequests();
       error = null;
     } catch (e) {
       error = e.toString();
@@ -19,12 +30,11 @@ class JoinManager with ChangeNotifier {
     _setLoading(false);
   }
 
-  /// Gửi yêu cầu tham gia nhóm
   Future<void> sendJoinRequest(String groupId) async {
     _setLoading(true);
     try {
       await JoinService.sendJoinRequest(groupId);
-      await fetchJoinRequests(); // Tải lại danh sách sau khi gửi
+      await fetchJoinRequests(); // refresh local cache
       error = null;
     } catch (e) {
       error = e.toString();
@@ -32,7 +42,6 @@ class JoinManager with ChangeNotifier {
     _setLoading(false);
   }
 
-  /// Duyệt yêu cầu tham gia nhóm (chỉ dành cho chủ nhóm)
   Future<void> approveJoinRequest(String jrId) async {
     _setLoading(true);
     try {
@@ -45,7 +54,6 @@ class JoinManager with ChangeNotifier {
     _setLoading(false);
   }
 
-  /// Từ chối yêu cầu tham gia nhóm (chỉ dành cho chủ nhóm)
   Future<void> rejectJoinRequest(String jrId) async {
     _setLoading(true);
     try {
@@ -58,9 +66,17 @@ class JoinManager with ChangeNotifier {
     _setLoading(false);
   }
 
-  /// Hàm helper cập nhật loading và thông báo cho UI
+  /* ─────────────────────────────────────────────
+     INTERNAL
+  ───────────────────────────────────────────── */
   void _setLoading(bool value) {
     isLoading = value;
-    notifyListeners();
+
+    // notify only after the current frame is done
+    if (SchedulerBinding.instance.schedulerPhase == SchedulerPhase.idle) {
+      notifyListeners();
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback((_) => notifyListeners());
+    }
   }
 }

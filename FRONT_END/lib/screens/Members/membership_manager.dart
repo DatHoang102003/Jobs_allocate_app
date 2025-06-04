@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import '../../services/membership_service.dart';
 
 class MemberManager extends ChangeNotifier {
+  /* ─────────────────────────────────────────────
+     STATE
+  ───────────────────────────────────────────── */
   List<dynamic> _members = [];
   List<dynamic> get members => _members;
 
@@ -11,19 +15,34 @@ class MemberManager extends ChangeNotifier {
   String? _myMembershipId;
   String? get myMembershipId => _myMembershipId;
 
-  void _setLoading(bool value) {
-    _isLoading = value;
-    notifyListeners();
+  /* ─────────────────────────────────────────────
+     INTERNAL: safe notifier
+  ───────────────────────────────────────────── */
+  void _safeNotify() {
+    if (SchedulerBinding.instance.schedulerPhase == SchedulerPhase.idle) {
+      notifyListeners();
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback((_) => notifyListeners());
+    }
   }
 
-  /// Lấy danh sách thành viên của một group
+  void _setLoading(bool value) {
+    _isLoading = value;
+    _safeNotify();
+  }
+
+  /* ─────────────────────────────────────────────
+     PUBLIC API
+  ───────────────────────────────────────────── */
+
+  /// Fetch all members of a group and cache my membership ID (if any).
   Future<void> fetchMembers(String groupId, {String? myUserId}) async {
     _setLoading(true);
     try {
       final fetched = await MembershipService.listMembersOfGroup(groupId);
       _members = fetched;
 
-      // Nếu có userId hiện tại, tìm xem user có trong nhóm không
+      // If current user provided, figure out their membership row (if any)
       if (myUserId != null) {
         final found = fetched.firstWhere(
           (m) => m['user'] == myUserId,
@@ -32,7 +51,7 @@ class MemberManager extends ChangeNotifier {
         _myMembershipId = found != null ? found['id'] : null;
       }
 
-      notifyListeners();
+      _safeNotify(); // ← post-frame notify
     } catch (e) {
       debugPrint('Failed to fetch members: $e');
     } finally {
@@ -40,26 +59,25 @@ class MemberManager extends ChangeNotifier {
     }
   }
 
-  /// Xác định người dùng đã tham gia nhóm chưa
-  bool isUserMember(String userId) {
-    return _members.any((m) => m['user'] == userId);
-  }
+  /// Is [userId] already a member of the current cache?
+  bool isUserMember(String userId) => _members.any((m) => m['user'] == userId);
 
-  /// Rời nhóm
+  /// Current user leaves the group.
   Future<void> leaveGroup() async {
     if (_myMembershipId == null) return;
+
     try {
       await MembershipService.leaveGroup(_myMembershipId!);
       _members.removeWhere((m) => m['id'] == _myMembershipId);
       _myMembershipId = null;
-      notifyListeners();
+      _safeNotify();
     } catch (e) {
       debugPrint('Failed to leave group: $e');
       rethrow;
     }
   }
 
-  /// Tìm kiếm thành viên trong nhóm theo từ khóa
+  /// Keyword search inside a group.
   Future<List<dynamic>> searchMembers(String groupId, String keyword) async {
     try {
       return await MembershipService.searchMembersInGroup(groupId, keyword);
@@ -69,10 +87,10 @@ class MemberManager extends ChangeNotifier {
     }
   }
 
-  /// Làm mới danh sách thành viên
+  /// Clear cached list (e.g. on logout).
   void clearMembers() {
     _members = [];
     _myMembershipId = null;
-    notifyListeners();
+    _safeNotify();
   }
 }

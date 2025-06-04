@@ -8,30 +8,39 @@ import '../Members/membership_manager.dart';
 import 'Group_detail/group_detail.dart';
 import 'groups_manager.dart';
 
-enum UserGroupStatus { admin, member, notJoined }
+enum UserGroupStatus { admin, member, pending, notJoined }
 
+/* ─────────────────────────────────────────────
+   Helper: decide current user’s relationship
+───────────────────────────────────────────── */
 Future<UserGroupStatus> checkUserGroupStatus({
   required String groupId,
   required String userId,
   required GroupsProvider groupsProvider,
   required MemberManager memberManager,
+  required JoinManager joinManager,
 }) async {
-  if (groupsProvider.adminGroups.any((group) => group.id == groupId)) {
+  if (groupsProvider.adminGroups.any((g) => g.id == groupId)) {
     return UserGroupStatus.admin;
   }
-
-  if (groupsProvider.memberGroups.any((group) => group.id == groupId)) {
+  if (groupsProvider.memberGroups.any((g) => g.id == groupId)) {
     return UserGroupStatus.member;
   }
+  if (joinManager.isPending(groupId)) return UserGroupStatus.pending;
 
   await memberManager.fetchMembers(groupId, myUserId: userId);
-  if (memberManager.isUserMember(userId)) {
-    return UserGroupStatus.member;
-  }
+  if (memberManager.isUserMember(userId)) return UserGroupStatus.member;
 
+  if (joinManager.joinRequests.isEmpty) {
+    await joinManager.fetchJoinRequests();
+    if (joinManager.isPending(groupId)) return UserGroupStatus.pending;
+  }
   return UserGroupStatus.notJoined;
 }
 
+/* ─────────────────────────────────────────────
+   Widget
+───────────────────────────────────────────── */
 class GroupSearch extends StatefulWidget {
   const GroupSearch({super.key});
 
@@ -40,8 +49,8 @@ class GroupSearch extends StatefulWidget {
 }
 
 class _GroupSearchState extends State<GroupSearch> {
-  final TextEditingController _searchController = TextEditingController();
-  final FocusNode _searchFocusNode = FocusNode();
+  final _searchController = TextEditingController();
+  final _searchFocusNode = FocusNode();
   List<Group> _searchResults = [];
 
   @override
@@ -52,15 +61,20 @@ class _GroupSearchState extends State<GroupSearch> {
   }
 
   Future<void> _handleSearch(String keyword) async {
+    // wait until the current build frame is done
+    await Future.delayed(Duration.zero);
+
     if (keyword.trim().isEmpty) {
-      setState(() => _searchResults = []);
+      if (mounted) setState(() => _searchResults = []);
       return;
     }
 
     try {
-      final groupProvider = Provider.of<GroupsProvider>(context, listen: false);
+      final groupProvider = context.read<GroupsProvider>();
       final results = await groupProvider.searchGroups(keyword);
-      setState(() => _searchResults = results);
+      if (mounted) setState(() => _searchResults = results);
+
+      await context.read<JoinManager>().fetchJoinRequests();
     } catch (e) {
       debugPrint("Search failed: $e");
     }
@@ -68,7 +82,7 @@ class _GroupSearchState extends State<GroupSearch> {
 
   @override
   Widget build(BuildContext context) {
-    final authManager = Provider.of<AuthManager>(context);
+    final authManager = context.watch<AuthManager>();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -87,7 +101,7 @@ class _GroupSearchState extends State<GroupSearch> {
       focusNode: _searchFocusNode,
       onChanged: _handleSearch,
       decoration: InputDecoration(
-        hintText: "Search group...",
+        hintText: 'Search group.',
         prefixIcon: const Icon(Icons.search),
         suffixIcon: IconButton(
           icon: const Icon(Icons.clear),
@@ -108,7 +122,7 @@ class _GroupSearchState extends State<GroupSearch> {
 
   Widget _buildSearchResultsCard(String? currentUserId) {
     if (currentUserId == null) {
-      return const Center(child: Text("User not logged in"));
+      return const Center(child: Text('User not logged in'));
     }
 
     return Card(
@@ -120,12 +134,11 @@ class _GroupSearchState extends State<GroupSearch> {
         itemCount: _searchResults.length,
         itemBuilder: (context, index) {
           final group = _searchResults[index];
-          final memberManager =
-              Provider.of<MemberManager>(context, listen: false);
-          final groupsProvider =
-              Provider.of<GroupsProvider>(context, listen: false);
+          final memberManager = context.read<MemberManager>();
+          final groupsProvider = context.read<GroupsProvider>();
+          final joinManager = context.read<JoinManager>();
           final adminName =
-              group.owner.isNotEmpty ? group.owner : "Unknown Admin";
+              group.owner.isNotEmpty ? group.owner : 'Unknown Admin';
 
           return FutureBuilder<UserGroupStatus>(
             future: checkUserGroupStatus(
@@ -133,53 +146,75 @@ class _GroupSearchState extends State<GroupSearch> {
               userId: currentUserId,
               groupsProvider: groupsProvider,
               memberManager: memberManager,
+              joinManager: joinManager,
             ),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
-                return const ListTile(title: Text("Loading..."));
+                return const ListTile(title: Text('Loading...'));
               }
 
               final userStatus = snapshot.data ?? UserGroupStatus.notJoined;
 
+              Color _btnColor() {
+                switch (userStatus) {
+                  case UserGroupStatus.admin:
+                  case UserGroupStatus.pending:
+                    return Colors.grey;
+                  case UserGroupStatus.member:
+                    return Colors.redAccent;
+                  default:
+                    return Colors.green;
+                }
+              }
+
+              String _btnLabel() {
+                switch (userStatus) {
+                  case UserGroupStatus.admin:
+                    return 'Owner';
+                  case UserGroupStatus.member:
+                    return 'Leave';
+                  case UserGroupStatus.pending:
+                    return 'Pending';
+                  default:
+                    return 'Join';
+                }
+              }
+
               return ListTile(
                 title: Text(group.name),
-                subtitle: Text("Admin: $adminName"),
+                subtitle: Text('Admin: $adminName'),
                 trailing: ElevatedButton(
-                  onPressed: () async {
-                    final joinManager =
-                        Provider.of<JoinManager>(context, listen: false);
-                    try {
-                      if (userStatus == UserGroupStatus.admin) return;
-                      if (userStatus == UserGroupStatus.member) {
-                        await memberManager.leaveGroup();
-                      } else {
-                        await joinManager.sendJoinRequest(group.id);
-                      }
+                  onPressed: (userStatus == UserGroupStatus.admin ||
+                          userStatus == UserGroupStatus.pending)
+                      ? null
+                      : () async {
+                          try {
+                            if (userStatus == UserGroupStatus.member) {
+                              await memberManager.leaveGroup();
+                            } else {
+                              await joinManager.sendJoinRequest(group.id);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Join request sent 🎉'),
+                                ),
+                              );
+                            }
 
-                      final updatedResults = await groupsProvider
-                          .searchGroups(_searchController.text);
-                      setState(() => _searchResults = updatedResults);
-                    } catch (e) {
-                      debugPrint("Action failed: $e");
-                    }
-                  },
+                            final updated = await groupsProvider
+                                .searchGroups(_searchController.text);
+                            if (mounted)
+                              setState(() => _searchResults = updated);
+                          } catch (e) {
+                            debugPrint('Action failed: $e');
+                          }
+                        },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: userStatus == UserGroupStatus.admin
-                        ? Colors.grey
-                        : (userStatus == UserGroupStatus.member
-                            ? Colors.redAccent
-                            : Colors.green),
+                    backgroundColor: _btnColor(),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(20),
                     ),
                   ),
-                  child: Text(
-                    userStatus == UserGroupStatus.admin
-                        ? "Owner"
-                        : (userStatus == UserGroupStatus.member
-                            ? "Leave"
-                            : "Join"),
-                  ),
+                  child: Text(_btnLabel()),
                 ),
                 onTap: () {
                   groupsProvider.setCurrent(group);
