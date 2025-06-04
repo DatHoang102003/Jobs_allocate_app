@@ -253,8 +253,13 @@ class _InviteRequestsTabState extends State<InviteRequestsTab> {
   Future<void> _fetchData() async {
     try {
       final inviteRes = await InviteService.listMyInvites();
+
+      // Lọc lời mời có trạng thái là 'pending' (chưa xử lý)
+      final pendingInvites =
+          inviteRes.where((inv) => inv['status'] == 'pending').toList();
+
       setState(() {
-        _invites = inviteRes;
+        _invites = pendingInvites;
         _isLoading = false;
       });
     } catch (e) {
@@ -264,13 +269,35 @@ class _InviteRequestsTabState extends State<InviteRequestsTab> {
   }
 
   Future<void> _acceptInvite(String id) async {
-    await InviteService.acceptInvite(id);
-    _fetchData();
+    try {
+      await InviteService.acceptInvite(id);
+      setState(() {
+        _invites.removeWhere((inv) => inv['id'] == id);
+      });
+      _showSnackBar("Bạn đã tham gia nhóm thành công");
+    } catch (e) {
+      debugPrint('Error accepting invite: $e');
+      _showSnackBar("Đã xảy ra lỗi khi tham gia nhóm");
+    }
   }
 
   Future<void> _rejectInvite(String id) async {
-    await InviteService.rejectInvite(id);
-    _fetchData();
+    try {
+      await InviteService.rejectInvite(id);
+      setState(() {
+        _invites.removeWhere((inv) => inv['id'] == id);
+      });
+      _showSnackBar("Bạn đã từ chối lời mời tham gia nhóm");
+    } catch (e) {
+      debugPrint('Error rejecting invite: $e');
+      _showSnackBar("Đã xảy ra lỗi khi từ chối lời mời");
+    }
+  }
+
+  void _showSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
   }
 
   @override
@@ -290,6 +317,7 @@ class _InviteRequestsTabState extends State<InviteRequestsTab> {
                     style:
                         TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
+                if (_invites.isEmpty) const Text("Không có lời mời nào."),
                 ..._invites.map((inv) {
                   final group = inv['expand']?['group'];
                   final groupName =
@@ -297,22 +325,23 @@ class _InviteRequestsTabState extends State<InviteRequestsTab> {
                   return Card(
                     child: ListTile(
                       title: Text(groupName),
-                      subtitle: const Text("You’ve been invited to join"),
+                      subtitle: const Text("Bạn đã được mời tham gia"),
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           IconButton(
-                              icon:
-                                  const Icon(Icons.check, color: Colors.green),
-                              onPressed: () => _acceptInvite(inv['id'])),
+                            icon: const Icon(Icons.check, color: Colors.green),
+                            onPressed: () => _acceptInvite(inv['id']),
+                          ),
                           IconButton(
-                              icon: const Icon(Icons.close, color: Colors.red),
-                              onPressed: () => _rejectInvite(inv['id'])),
+                            icon: const Icon(Icons.close, color: Colors.red),
+                            onPressed: () => _rejectInvite(inv['id']),
+                          ),
                         ],
                       ),
                     ),
                   );
-                }),
+                }).toList(),
               ],
             ),
           );
