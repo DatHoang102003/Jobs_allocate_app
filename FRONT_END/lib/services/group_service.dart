@@ -115,8 +115,8 @@ class GroupService {
   }
 
   /* -------------------------------------------------
-     List groups where I'm an admin
-  ------------------------------------------------- */
+   List groups where I'm an admin (excluding soft-deleted)
+------------------------------------------------- */
   static Future<List<dynamic>> getAdminGroups() async {
     final res = await http.get(
       Uri.parse('$_base/groups/admin'),
@@ -128,12 +128,15 @@ class GroupService {
           jsonDecode(res.body)['error'] ?? 'Failed to load admin groups');
     }
 
-    return jsonDecode(res.body) as List<dynamic>;
+    final data = jsonDecode(res.body) as List<dynamic>;
+
+    // Lọc bỏ các nhóm đã bị soft-delete
+    return data.where((g) => g['deleted'] != true).toList();
   }
 
-  /* -------------------------------------------------
-     List groups where I'm a member (non-admin)
-  ------------------------------------------------- */
+/* -------------------------------------------------
+   List groups where I'm a member (excluding soft-deleted)
+------------------------------------------------- */
   static Future<List<dynamic>> getMemberGroups() async {
     final res = await http.get(
       Uri.parse('$_base/groups/member'),
@@ -145,7 +148,10 @@ class GroupService {
           jsonDecode(res.body)['error'] ?? 'Failed to load member groups');
     }
 
-    return jsonDecode(res.body) as List<dynamic>;
+    final data = jsonDecode(res.body) as List<dynamic>;
+
+    // Lọc bỏ các nhóm đã bị soft-delete
+    return data.where((g) => g['deleted'] != true).toList();
   }
 
   /* -------------------------------------------------
@@ -197,5 +203,26 @@ class GroupService {
     }
 
     print("✅ Soft-deleted group: $groupId");
+  }
+
+  /* -------------------------------------------------
+     Restore a soft-deleted group
+  ------------------------------------------------- */
+  static Future<Map<String, dynamic>> restoreGroup(String groupId) async {
+    final res = await http.patch(
+      Uri.parse('$_base/groups/$groupId/restore'),
+      headers: await _headers(),
+    );
+
+    if (res.statusCode != 200) {
+      throw Exception(
+        jsonDecode(res.body)['error'] ?? 'Failed to restore group',
+      );
+    }
+
+    final data = jsonDecode(res.body);
+    print("✅ Restored group: $data");
+
+    return data;
   }
 }

@@ -45,20 +45,6 @@ class MemberManager extends ChangeNotifier {
     return _members.any((m) => m['user'] == userId);
   }
 
-  /// Rời nhóm
-  Future<void> leaveGroup() async {
-    if (_myMembershipId == null) return;
-    try {
-      await MembershipService.leaveGroup(_myMembershipId!);
-      _members.removeWhere((m) => m['id'] == _myMembershipId);
-      _myMembershipId = null;
-      notifyListeners();
-    } catch (e) {
-      debugPrint('Failed to leave group: $e');
-      rethrow;
-    }
-  }
-
   /// Tìm kiếm thành viên trong nhóm theo từ khóa
   Future<List<dynamic>> searchMembers(String groupId, String keyword) async {
     try {
@@ -74,5 +60,21 @@ class MemberManager extends ChangeNotifier {
     _members = [];
     _myMembershipId = null;
     notifyListeners();
+  }
+
+  /// Rời khỏi nhóm
+  Future<void> leaveGroup(String membershipId) async {
+    _setLoading(true);
+    try {
+      await MembershipService.leaveGroup(membershipId);
+      _members = [];
+      _myMembershipId = null;
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Failed to leave group: $e');
+      rethrow;
+    } finally {
+      _setLoading(false);
+    }
   }
 }

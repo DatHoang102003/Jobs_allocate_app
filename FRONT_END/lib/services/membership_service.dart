@@ -64,18 +64,6 @@ class MembershipService {
   }
 
   /* -------------------------------------------------
-     Leave a group (delete my own membership)
-  ------------------------------------------------- */
-  static Future<Map<String, dynamic>> leaveGroup(String membershipId) async {
-    final res = await http.delete(
-      Uri.parse('$_base/memberships/$membershipId'),
-      headers: await _headers(),
-    );
-    if (res.statusCode != 200) throw Exception(res.body);
-    return jsonDecode(res.body);
-  }
-
-  /* -------------------------------------------------
      Owner removes a member
   ------------------------------------------------- */
   static Future<Map<String, dynamic>> removeMember(
@@ -105,7 +93,7 @@ class MembershipService {
 
   /* -------------------------------------------------
    Search members in a group by name or email
-------------------------------------------------- */
+  ------------------------------------------------- */
   static Future<List<dynamic>> searchMembersInGroup(
       String groupId, String query) async {
     final prefs = await SharedPreferences.getInstance();
@@ -141,5 +129,19 @@ class MembershipService {
     }
 
     return members;
+  }
+
+  /* -------------------------------------------------
+     Leave a group (delete my own membership)
+  ------------------------------------------------- */
+  static Future<Map<String, dynamic>> leaveGroup(String membershipId) async {
+    final res = await http.delete(
+      Uri.parse('$_base/memberships/$membershipId'),
+      headers: await _headers(),
+    );
+    if (res.statusCode != 200) {
+      throw Exception(jsonDecode(res.body)['error'] ?? 'Failed to leave group');
+    }
+    return jsonDecode(res.body);
   }
 }

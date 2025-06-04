@@ -271,9 +271,15 @@ class _InviteRequestsTabState extends State<InviteRequestsTab> {
   Future<void> _acceptInvite(String id) async {
     try {
       await InviteService.acceptInvite(id);
+
+      // Cập nhật danh sách lời mời
       setState(() {
         _invites.removeWhere((inv) => inv['id'] == id);
       });
+
+      // Gọi lại fetchGroups để cập nhật danh sách nhóm
+      await Provider.of<GroupsProvider>(context, listen: false).fetchGroups();
+
       _showSnackBar("Bạn đã tham gia nhóm thành công");
     } catch (e) {
       debugPrint('Error accepting invite: $e');
@@ -309,10 +315,6 @@ class _InviteRequestsTabState extends State<InviteRequestsTab> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text("Join Requests",
-                    style:
-                        TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 24),
                 const Text("Invites",
                     style:
                         TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),

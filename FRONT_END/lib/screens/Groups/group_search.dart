@@ -151,7 +151,7 @@ class _GroupSearchState extends State<GroupSearch> {
                     try {
                       if (userStatus == UserGroupStatus.admin) return;
                       if (userStatus == UserGroupStatus.member) {
-                        await memberManager.leaveGroup();
+                        // await memberManager.leaveGroup(membershipId);
                       } else {
                         await joinManager.sendJoinRequest(group.id);
                       }

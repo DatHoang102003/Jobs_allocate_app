@@ -255,3 +255,43 @@ export async function deleteGroup(req, res) {
     res.status(err?.status || 400).json({ error: err.message });
   }
 }
+/* ─────────────────────── Restore soft-deleted group ─────────────────────── */
+export async function restoreGroup(req, res) {
+  const pbUser = req.pbUser;
+  const userId = req.user.id;
+  const groupId = req.params.groupId;
+
+  try {
+    const group = await pbUser.collection("groups").getOne(groupId);
+
+    if (!group.deleted) {
+      return res.status(400).json({ error: "Group is not deleted" });
+    }
+
+    // Kiểm tra quyền khôi phục: chỉ chủ nhóm hoặc admin
+    let isAdminMember = false;
+    if (group.owner !== userId) {
+      try {
+        const ms = await pbUser
+          .collection("memberships")
+          .getFirstListItem(`group="${groupId}" && user="${userId}"`);
+
+        isAdminMember = ms?.role === "admin";
+      } catch (e) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+
+      if (!isAdminMember) return res.status(403).json({ error: "Forbidden" });
+    }
+
+    const restored = await pbUser.collection("groups").update(groupId, {
+      deleted: false,
+    });
+
+    res.json({ message: "Group restored successfully", group: restored });
+  } catch (err) {
+    console.error("restoreGroup error:", err.response?.data || err);
+    res.status(err?.status || 400).json({ error: err.message });
+  }
+}
+

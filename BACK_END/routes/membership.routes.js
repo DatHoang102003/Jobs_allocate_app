@@ -168,11 +168,7 @@ router.delete("/memberships/:membershipId", requireAuth, leaveGroup);
 router.get("/groups/:groupId/members/search", requireAuth, searchMembersInGroup); 
 
 // 5) Owner kicks a member
-router.delete(
-  "/groups/:groupId/members/:membershipId",
-  requireAuth,
-  removeMember
-);
+router.delete("/groups/:groupId/members/:membershipId",requireAuth,removeMember);
 
 // 6) Owner changes a member's role
 router.patch("/memberships/:membershipId/role", requireAuth, updateMemberRole);

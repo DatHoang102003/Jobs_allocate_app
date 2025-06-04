@@ -11,6 +11,7 @@ import {
   updateGroup,
   deleteGroup,
   searchGroups,
+  restoreGroup,
 } from "../controllers/group.controller.js";
 
 const router = express.Router();
@@ -255,6 +256,42 @@ router.get("/member", requireAuth, listMemberGroups);
  *       404:
  *         description: Group not found or already deleted
  */
+/* ─────────────────────── Restore a soft-deleted group ─────────────────────── */
+/**
+ * @swagger
+ * /groups/{groupId}/restore:
+ *   patch:
+ *     summary: Restore a previously soft-deleted group
+ *     tags: [Groups]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: groupId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID of the group to restore
+ *     responses:
+ *       200:
+ *         description: Group successfully restored
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 ok:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Group restored
+ *       403:
+ *         description: Forbidden (only owner or admin can restore)
+ *       404:
+ *         description: Group not found or not deleted
+ */
+router.patch("/:groupId/restore", requireAuth, restoreGroup);
 
 router.get("/:groupId", requireAuth, getGroupDetails);
 router.patch("/:groupId", requireAuth, updateGroup);
