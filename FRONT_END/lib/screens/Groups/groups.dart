@@ -309,10 +309,6 @@ class _InviteRequestsTabState extends State<InviteRequestsTab> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text("Join Requests",
-                    style:
-                        TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 24),
                 const Text("Invites",
                     style:
                         TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),

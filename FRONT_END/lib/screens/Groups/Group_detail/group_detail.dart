@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import 'package:task_manager_app/screens/Tasks/create_task.dart';
 import 'package:task_manager_app/services/group_service.dart';
 import 'package:task_manager_app/services/membership_service.dart';
@@ -10,6 +11,7 @@ import '../edit_dialog.dart';
 import '../groups_manager.dart';
 import 'members_tab.dart';
 import 'tasks_tab.dart';
+import 'join_requests_tab.dart'; // 🔸 NEW
 
 class GroupDetailScreen extends StatefulWidget {
   final String groupId;
@@ -27,12 +29,14 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
   @override
   void initState() {
     super.initState();
-    _init(); // ← new wrapper
+    _init();
   }
 
-  /// Ensures the current user-id is cached, **then** fetches group data.
+  /* ─────────────────────────────────────────────
+     LOAD DATA
+  ───────────────────────────────────────────── */
   Future<void> _init() async {
-    await AuthService.getUserId(); // ← one-time cache fill
+    await AuthService.getUserId(); // make sure cache is filled
     await _fetch();
   }
 
@@ -57,6 +61,9 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
     }
   }
 
+  /* ─────────────────────────────────────────────
+     UI HELPERS
+  ───────────────────────────────────────────── */
   Future<void> _openCreateTaskDialog() async {
     final created = await showDialog<bool>(
       context: context,
@@ -65,15 +72,12 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
     if (created == true) await _fetch();
   }
 
-  // Placeholder for Add Member functionality
   Future<void> _addMember() async {
-    // Implement your add member logic here
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Add Member functionality coming soon!')),
     );
   }
 
-  // Placeholder for Edit Group Info functionality
   Future<void> _editGroupInfo() async {
     final g = detail!['group'];
     final groupModel = Group(
@@ -85,15 +89,14 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
       updated: DateTime.parse(g['updated']),
     );
 
-    await showEditGroupDialog(context, groupModel, (updatedGroup) async {
-      await _fetch(); // Refresh group detail
+    await showEditGroupDialog(context, groupModel, (_) async {
+      await _fetch();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Updated successfully')),
       );
     });
   }
 
-  // Soft-delete a group
   Future<void> _deleteGroup() async {
     try {
       await Provider.of<GroupsProvider>(context, listen: false)
@@ -101,7 +104,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Group deleted successfully')),
       );
-      Navigator.of(context).pop(); // Navigate back after deletion
+      Navigator.of(context).pop();
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to delete group: $e')),
@@ -109,17 +112,15 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
     }
   }
 
+  /* ─────────────────────────────────────────────
+     BUILD
+  ───────────────────────────────────────────── */
   @override
   Widget build(BuildContext context) {
-    // Lấy userId từ AuthService (có thể thay bằng Provider nếu dùng AuthManager)
     final current = AuthService.currentUserId;
-    // Nếu bạn dùng Provider:
-    // final current = Provider.of<AuthManager>(context).userId;
 
     if (_loading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     if (detail == null) {
       return const Scaffold(
@@ -142,14 +143,37 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
             ((m['user'] == current) ||
                 (m['expand']?['user']?['id'] == current)));
 
-    final idToName = {
-      for (var m in membersAll)
-        ((m['expand']?['user']?['id']) ?? m['user']) as String:
-            (m['expand']?['user']?['name'] as String? ?? 'Unnamed'),
-    };
+    /* ---- tabs & views ----------------------------------------------- */
+    final tabs = <Tab>[
+      const Tab(text: 'Members'),
+      const Tab(text: 'Tasks'),
+      if (canManage) const Tab(text: 'Requests'),
+    ];
+
+    final tabViews = <Widget>[
+      MembersTab(
+        groupId: widget.groupId,
+        ownerId: ownerId,
+        allMembers: membersAll,
+        admins: admins,
+        members: members,
+        canManage: canManage,
+        onRefresh: _fetch,
+      ),
+      TasksTab(
+        currentUserId: current,
+        groupId: widget.groupId,
+        idToName: {
+          for (var m in membersAll)
+            ((m['expand']?['user']?['id']) ?? m['user']) as String:
+                (m['expand']?['user']?['name'] as String? ?? 'Unnamed'),
+        },
+      ),
+      if (canManage) JoinRequestsTab(groupId: widget.groupId, onUpdate: _fetch, ),
+    ];
 
     return DefaultTabController(
-      length: 2,
+      length: tabs.length, // 🔸 dynamic
       child: Scaffold(
         appBar: AppBar(
           title: Text(g['name']),
@@ -172,29 +196,16 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
                     break;
                 }
               },
-              itemBuilder: (BuildContext context) => [
-                const PopupMenuItem(
-                  value: 'add_member',
-                  child: Text('Add members'),
-                ),
-                const PopupMenuItem(
-                  value: 'add_task',
-                  child: Text('Add task'),
-                ),
-                const PopupMenuItem(
-                  value: 'edit_info',
-                  child: Text('Edit group'),
-                ),
-                const PopupMenuItem(
-                  value: 'delete_group',
-                  child: Text('Delete group'),
-                ),
+              itemBuilder: (_) => const [
+                PopupMenuItem(value: 'add_member', child: Text('Add members')),
+                PopupMenuItem(value: 'add_task', child: Text('Add task')),
+                PopupMenuItem(value: 'edit_info', child: Text('Edit group')),
+                PopupMenuItem(
+                    value: 'delete_group', child: Text('Delete group')),
               ],
             ),
           ],
-          bottom: const TabBar(
-            tabs: [Tab(text: 'Members'), Tab(text: 'Tasks')],
-          ),
+          bottom: TabBar(tabs: tabs), // 🔸 use list
         ),
         floatingActionButton: canManage
             ? FloatingActionButton(
@@ -202,24 +213,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
                 child: const Icon(Icons.add),
               )
             : null,
-        body: TabBarView(
-          children: [
-            MembersTab(
-              groupId: widget.groupId,
-              ownerId: ownerId,
-              allMembers: membersAll,
-              admins: admins,
-              members: members,
-              canManage: canManage,
-              onRefresh: _fetch,
-            ),
-            TasksTab(
-              currentUserId: current,
-              groupId: widget.groupId,
-              idToName: idToName,
-            ),
-          ],
-        ),
+        body: TabBarView(children: tabViews), // 🔸 use list
       ),
     );
   }

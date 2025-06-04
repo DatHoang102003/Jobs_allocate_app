@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:task_manager_app/services/membership_service.dart';
 import 'package:task_manager_app/services/auth_service.dart';
 
-/* ───────────── search bar ───────────── */
+/// ───────────── Search bar ─────────────
 class SearchBarWidget extends StatelessWidget {
   final TextEditingController controller;
   final ValueChanged<String> onChanged;
+
   const SearchBarWidget({
     super.key,
     required this.controller,
@@ -29,7 +30,7 @@ class SearchBarWidget extends StatelessWidget {
   }
 }
 
-/* ───────────── Members tab ───────────── */
+/// ───────────── Members tab ─────────────
 class MembersTab extends StatefulWidget {
   final String groupId;
   final String ownerId;
@@ -37,7 +38,7 @@ class MembersTab extends StatefulWidget {
   final List<dynamic> admins;
   final List<dynamic> members;
   final bool canManage; // owner or admin
-  final VoidCallback onRefresh;
+  final VoidCallback onRefresh; // triggers a full reload of members
 
   const MembersTab({
     super.key,
@@ -112,7 +113,7 @@ class _MembersTabState extends State<MembersTab> {
           const SnackBar(content: Text('Member removed')),
         );
       }
-      widget.onRefresh();
+      widget.onRefresh(); // refresh the parent’s member list
     } finally {
       if (mounted) {
         setState(() {
@@ -141,8 +142,16 @@ class _MembersTabState extends State<MembersTab> {
 
     return ListTile(
       leading: CircleAvatar(
-        backgroundImage: avatarUrl != null ? NetworkImage(avatarUrl) : null,
-        child: avatarUrl == null ? const Icon(Icons.person) : null,
+        backgroundImage: (avatarUrl != null && avatarUrl.isNotEmpty)
+            ? NetworkImage(avatarUrl)
+            : null,
+        child: (avatarUrl == null || avatarUrl.isEmpty)
+            ? Text(
+                (u['name'] as String? ?? '?').isNotEmpty
+                    ? (u['name'] as String)[0].toUpperCase()
+                    : '?',
+              )
+            : null,
       ),
       title: Text(u['name'] ?? 'Unnamed'),
       subtitle: Text(targetRole.toUpperCase()),
@@ -174,14 +183,18 @@ class _MembersTabState extends State<MembersTab> {
             padding: const EdgeInsets.all(16),
             children: [
               if (admins.isNotEmpty) ...[
-                Text('Admins (${admins.length})',
-                    style: const TextStyle(fontWeight: FontWeight.bold)),
+                Text(
+                  'Admins (${admins.length})',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
                 const SizedBox(height: 8),
                 ...admins.map(_memberTile),
                 const SizedBox(height: 20),
               ],
-              Text('Members (${members.length})',
-                  style: const TextStyle(fontWeight: FontWeight.bold)),
+              Text(
+                'Members (${members.length})',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
               const SizedBox(height: 8),
               ...members.map(_memberTile),
             ],

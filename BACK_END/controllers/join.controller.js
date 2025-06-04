@@ -145,3 +145,35 @@ export async function rejectJoinRequest(req, res) {
     return res.status(err?.status || 500).json({ error: err.message });
   }
 }
+
+export async function listGroupJoinRequests(req, res) {
+  const { groupId } = req.params; // /groups/:groupId/join_requests
+  const userId = req.user?.id;
+  if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+  try {
+    // Make sure caller is the owner (or admin) of this group
+    const group = await req.pbUser.collection("groups").getOne(groupId);
+    if (group.owner !== userId) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
+    /* optional pagination */
+    const page = parseInt(req.query.page, 10) || 1;
+    const perPage = parseInt(req.query.perPage, 10) || 500;
+
+    const result = await req.pbUser
+      .collection("join_requests")
+      .getList(page, perPage, {
+        filter: `group="${groupId}" && status="pending"`,
+        sort: "-created",
+        expand: "user",
+      });
+
+    return res.json(result.items);
+  } catch (err) {
+    console.error("listGroupJoinRequests error:", err.response?.data || err);
+    const status = err.status && err.status !== 0 ? err.status : 500;
+    return res.status(status).json({ error: err.message });
+  }
+}
