@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../Tasks/tasks_manager.dart'; // Đảm bảo đúng đường dẫn
+import '../../Tasks/tasks_manager.dart'; // make sure path is correct
 
 class TasksTab extends StatefulWidget {
   final String currentUserId;
@@ -22,27 +22,27 @@ class _TasksTabState extends State<TasksTab> {
   @override
   void initState() {
     super.initState();
-    _loadTasks();
+    // first load – defer until after the first frame
+    WidgetsBinding.instance.addPostFrameCallback((_) => _reload());
   }
 
-  Future<void> _loadTasks() async {
-    final tasksProvider = Provider.of<TasksProvider>(context, listen: false);
-    await tasksProvider.loadTasksByGroup(widget.groupId);
+  Future<void> _reload() async {
+    await context.read<TasksProvider>().loadTasksByGroup(widget.groupId);
   }
 
   @override
   Widget build(BuildContext context) {
-    final tasksProvider = Provider.of<TasksProvider>(context);
-    final isLoading = tasksProvider.isLoading;
-    final tasks = tasksProvider.tasks;
+    final provider = context.watch<TasksProvider>();
+    final tasks = provider.tasks;
 
-    if (isLoading) {
+    if (provider.isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
 
     return RefreshIndicator(
-      onRefresh: _loadTasks,
+      onRefresh: _reload,
       child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(16),
         children: [
           Text(
@@ -52,11 +52,11 @@ class _TasksTabState extends State<TasksTab> {
           const SizedBox(height: 8),
           ...tasks.map((t) {
             final assigneeId = t['assignee'] as String?;
-            final isCurrentUser = assigneeId == widget.currentUserId;
             final assignee = assigneeId != null
                 ? widget.idToName[assigneeId] ?? 'Unknown'
                 : 'Unassigned';
-            final status = t['status'] as String;
+            final isCurrentUser = assigneeId == widget.currentUserId;
+            final status = t['status'] as String? ?? 'pending';
             final taskId = t['id'] as String;
 
             return Card(
@@ -74,7 +74,9 @@ class _TasksTabState extends State<TasksTab> {
                           child: Text(
                             t['title'] ?? '(No title)',
                             style: const TextStyle(
-                                fontSize: 16, fontWeight: FontWeight.w600),
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
                       ],
@@ -94,19 +96,17 @@ class _TasksTabState extends State<TasksTab> {
                                   if (newStatus != null &&
                                       newStatus != status) {
                                     try {
-                                      await tasksProvider.updateTaskStatus(
-                                          taskId, newStatus);
+                                      await context
+                                          .read<TasksProvider>()
+                                          .updateTaskStatus(taskId, newStatus);
                                       ScaffoldMessenger.of(context)
-                                          .showSnackBar(
-                                        const SnackBar(
-                                            content:
-                                                Text('Cập nhật thành công')),
-                                      );
+                                          .showSnackBar(const SnackBar(
+                                              content:
+                                                  Text('Cập nhật thành công')));
                                     } catch (e) {
                                       ScaffoldMessenger.of(context)
-                                          .showSnackBar(
-                                        SnackBar(content: Text('Lỗi: $e')),
-                                      );
+                                          .showSnackBar(SnackBar(
+                                              content: Text('Lỗi: $e')));
                                     }
                                   }
                                 },

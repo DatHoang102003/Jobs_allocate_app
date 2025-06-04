@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:task_manager_app/screens/Auth/account.dart';
 import 'package:task_manager_app/screens/Auth/auth_manager.dart';
 import 'package:task_manager_app/screens/Groups/groups_manager.dart';
+import 'package:task_manager_app/screens/Members/join_manager.dart';
 import 'package:task_manager_app/screens/Members/membership_manager.dart';
 import 'package:task_manager_app/screens/Tasks/tasks_manager.dart';
 import 'package:task_manager_app/screens/home.dart';
@@ -51,6 +52,7 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => TasksProvider()),
         ChangeNotifierProvider(create: (_) => AuthManager()..init()),
         ChangeNotifierProvider(create: (_) => MemberManager()),
+        ChangeNotifierProvider(create: (_) => JoinManager()),
       ],
       child: MaterialApp(
         title: 'Task Manager',

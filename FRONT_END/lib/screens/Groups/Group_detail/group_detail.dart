@@ -153,8 +153,6 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
                 try {
                   // Gọi hàm restoreGroup để khôi phục
                   await groupsProvider.restoreGroup(groupData);
-                  // Fetch lại danh sách nhóm để cập nhật trạng thái
-                  await groupsProvider.fetchGroups();
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text('Đã khôi phục nhóm')),

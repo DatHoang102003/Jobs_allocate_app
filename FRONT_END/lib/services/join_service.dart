@@ -76,4 +76,51 @@ class JoinService {
     if (res.statusCode != 200) throw Exception(res.body);
     return jsonDecode(res.body);
   }
+
+  /* -------------------------------------------------
+   List all join-requests for a specific group
+   (owner/admin only)
+------------------------------------------------- */
+
+/* -------------------------------------------------
+   List pending join-requests for ONE group
+------------------------------------------------- */
+  static Future<List<dynamic>> listGroupJoinRequests(
+    String groupId, {
+    String status = 'pending',
+    int page = 1,
+    int perPage = 500,
+  }) async {
+    final uri = Uri.parse('$_base/groups/$groupId/join_requests').replace(
+      queryParameters: {
+        'status': status,
+        if (page > 0) 'page': page.toString(),
+        if (perPage > 0) 'perPage': perPage.toString(),
+      },
+    );
+
+    _log('GET $uri');
+
+    final res = await http.get(uri, headers: await _headers());
+    _log('→ ${res.statusCode}  ${res.body}');
+
+    if (res.statusCode != 200) throw Exception(res.body);
+
+    final decoded = jsonDecode(res.body);
+
+    // PocketBase returns either an array OR {items:[…]} if paginated
+    List<dynamic> items;
+    if (decoded is List) {
+      items = decoded;
+    } else if (decoded is Map && decoded['items'] is List) {
+      items = decoded['items'];
+    } else {
+      items = [];
+    }
+
+    return items;
+  }
+
+/* helper */
+  static void _log(String msg) => print('[JoinService] $msg');
 }

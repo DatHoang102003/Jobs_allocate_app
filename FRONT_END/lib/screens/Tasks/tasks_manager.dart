@@ -1,12 +1,37 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import '/services/task_service.dart';
 
 class TasksProvider with ChangeNotifier {
+  /* ───────────────────────────────
+     STATE
+  ─────────────────────────────── */
   List<Map<String, dynamic>> _tasks = [];
   bool _loading = false;
 
   List<Map<String, dynamic>> get tasks => List.unmodifiable(_tasks);
   bool get isLoading => _loading;
+
+  /* ───────────────────────────────
+     INTERNAL – safe notifier
+  ─────────────────────────────── */
+  void _safeNotify() {
+    if (SchedulerBinding.instance.schedulerPhase == SchedulerPhase.idle) {
+      notifyListeners();
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback((_) => notifyListeners());
+    }
+  }
+
+  void _setLoading(bool value) {
+    _loading = value;
+    _safeNotify();
+  }
+
+  /* ───────────────────────────────
+     PUBLIC API
+  ─────────────────────────────── */
 
   /// Tải danh sách task theo group (hỗ trợ lọc và phân trang)
   Future<void> loadTasksByGroup(
@@ -16,8 +41,7 @@ class TasksProvider with ChangeNotifier {
     int? page,
     int? perPage,
   }) async {
-    _loading = true;
-    notifyListeners();
+    _setLoading(true);
 
     try {
       final fetched = await TaskService.getTasks(
@@ -28,12 +52,13 @@ class TasksProvider with ChangeNotifier {
         perPage: perPage,
       );
       _tasks = List<Map<String, dynamic>>.from(fetched);
+      _safeNotify(); // update list after fetch
     } catch (e) {
-      print('loadTasksByGroup error: $e');
+      debugPrint('loadTasksByGroup error: $e');
       _tasks = [];
+      _safeNotify();
     } finally {
-      _loading = false;
-      notifyListeners();
+      _setLoading(false);
     }
   }
 
@@ -53,10 +78,10 @@ class TasksProvider with ChangeNotifier {
         assignee: assignee,
         deadline: deadline,
       );
-      _tasks.insert(0, newTask); // chèn lên đầu danh sách
-      notifyListeners();
+      _tasks.insert(0, newTask);
+      _safeNotify();
     } catch (e) {
-      print('createTask error: $e');
+      debugPrint('createTask error: $e');
       rethrow;
     }
   }
@@ -68,10 +93,10 @@ class TasksProvider with ChangeNotifier {
       final index = _tasks.indexWhere((t) => t['id'] == taskId);
       if (index != -1) {
         _tasks[index] = updated;
-        notifyListeners();
+        _safeNotify();
       }
     } catch (e) {
-      print('updateTaskStatus error: $e');
+      debugPrint('updateTaskStatus error: $e');
       rethrow;
     }
   }
@@ -82,10 +107,10 @@ class TasksProvider with ChangeNotifier {
       final success = await TaskService.deleteTask(taskId);
       if (success) {
         _tasks.removeWhere((t) => t['id'] == taskId);
-        notifyListeners();
+        _safeNotify();
       }
     } catch (e) {
-      print('deleteTask error: $e');
+      debugPrint('deleteTask error: $e');
       rethrow;
     }
   }
@@ -93,23 +118,23 @@ class TasksProvider with ChangeNotifier {
   /// Xoá toàn bộ task trong provider (dọn dẹp khi đổi group)
   void clearTasks() {
     _tasks = [];
-    notifyListeners();
+    _safeNotify();
   }
 
   /// Lấy danh sách task cho ngày hôm nay hoặc ngày cụ thể (không theo group)
   Future<void> loadTasksForToday({DateTime? date}) async {
-    _loading = true;
-    notifyListeners();
+    _setLoading(true);
 
     try {
       final fetched = await TaskService.getTasksForToday(date: date);
       _tasks = List<Map<String, dynamic>>.from(fetched);
+      _safeNotify();
     } catch (e) {
-      print('loadTasksForToday error: $e');
+      debugPrint('loadTasksForToday error: $e');
       _tasks = [];
+      _safeNotify();
     } finally {
-      _loading = false;
-      notifyListeners();
+      _setLoading(false);
     }
   }
 }
