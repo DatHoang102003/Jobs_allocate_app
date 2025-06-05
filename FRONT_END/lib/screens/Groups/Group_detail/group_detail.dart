@@ -11,6 +11,7 @@ import '../edit_dialog.dart';
 import '../groups_manager.dart';
 import 'members_tab.dart';
 import 'tasks_tab.dart';
+import 'join_requests_tab.dart';
 
 class GroupDetailScreen extends StatefulWidget {
   final String groupId;
@@ -31,6 +32,9 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
     _init();
   }
 
+  /* ─────────────────────────────────────────────
+     LOAD DATA
+  ───────────────────────────────────────────── */
   Future<void> _init() async {
     await AuthService.getUserId();
     await _fetch();
@@ -38,7 +42,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
 
   Future<void> _fetch() async {
     try {
-      final currentUserId = AuthService.currentUserId; // Lấy userId hiện tại
+      final currentUserId = AuthService.currentUserId;
       final gDetail = await GroupService.getGroupDetail(widget.groupId);
       final members =
           await MembershipService.listMembersOfGroup(widget.groupId);
@@ -63,6 +67,9 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
     }
   }
 
+  /* ─────────────────────────────────────────────
+     UI HELPERS
+  ───────────────────────────────────────────── */
   Future<void> _openCreateTaskDialog() async {
     final created = await showDialog<bool>(
       context: context,
@@ -97,7 +104,6 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
   }
 
   Future<void> _deleteGroup() async {
-    // Hiển thị dialog xác nhận trước khi xóa
     final bool? confirmDelete = await showDialog<bool>(
       context: context,
       builder: (BuildContext context) {
@@ -118,11 +124,9 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
       },
     );
 
-    // Nếu người dùng không xác nhận, thoát hàm
     if (confirmDelete != true) return;
 
     try {
-      // Lấy thông tin nhóm hiện tại trước khi xóa
       final groupsProvider =
           Provider.of<GroupsProvider>(context, listen: false);
       final groupId = widget.groupId;
@@ -138,10 +142,8 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
         'isAdmin': groupsProvider.adminGroups.contains(currentGroup),
       };
 
-      // Thực hiện xóa nhóm
       await groupsProvider.deleteGroup(groupId);
 
-      // Hiển thị SnackBar với tùy chọn Undo
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -151,7 +153,6 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
               label: 'Hoàn tác',
               onPressed: () async {
                 try {
-                  // Gọi hàm restoreGroup để khôi phục
                   await groupsProvider.restoreGroup(groupData);
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -170,7 +171,6 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
           ),
         );
 
-        // Quay lại màn hình trước
         if (context.mounted) {
           Navigator.of(context).pop();
         }
@@ -231,6 +231,9 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
     }
   }
 
+  /* ─────────────────────────────────────────────
+     BUILD
+  ───────────────────────────────────────────── */
   @override
   Widget build(BuildContext context) {
     final current = AuthService.currentUserId;
@@ -267,8 +270,33 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
             (m['expand']?['user']?['name'] as String? ?? 'Unnamed'),
     };
 
+    /* ---- tabs & views ----------------------------------------------- */
+    final tabs = <Tab>[
+      const Tab(text: 'Members'),
+      const Tab(text: 'Tasks'),
+      if (canManage) const Tab(text: 'Requests'),
+    ];
+
+    final tabViews = <Widget>[
+      MembersTab(
+        groupId: widget.groupId,
+        ownerId: ownerId,
+        allMembers: membersAll,
+        admins: admins,
+        members: members,
+        canManage: canManage,
+        onRefresh: _fetch,
+      ),
+      TasksTab(
+        currentUserId: current,
+        groupId: widget.groupId,
+        idToName: idToName,
+      ),
+      if (canManage) JoinRequestsTab(groupId: widget.groupId, onUpdate: _fetch),
+    ];
+
     return DefaultTabController(
-      length: 2,
+      length: tabs.length,
       child: Scaffold(
         appBar: AppBar(
           title: Text(g['name']),
@@ -292,23 +320,13 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
                       break;
                   }
                 },
-                itemBuilder: (BuildContext context) => [
-                  const PopupMenuItem(
-                    value: 'add_member',
-                    child: Text('Add members'),
-                  ),
-                  const PopupMenuItem(
-                    value: 'add_task',
-                    child: Text('Add task'),
-                  ),
-                  const PopupMenuItem(
-                    value: 'edit_info',
-                    child: Text('Edit group'),
-                  ),
-                  const PopupMenuItem(
-                    value: 'delete_group',
-                    child: Text('Delete group'),
-                  ),
+                itemBuilder: (BuildContext context) => const [
+                  PopupMenuItem(
+                      value: 'add_member', child: Text('Add members')),
+                  PopupMenuItem(value: 'add_task', child: Text('Add task')),
+                  PopupMenuItem(value: 'edit_info', child: Text('Edit group')),
+                  PopupMenuItem(
+                      value: 'delete_group', child: Text('Delete group')),
                 ],
               )
             else
@@ -318,9 +336,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
                 onPressed: _leaveGroup,
               ),
           ],
-          bottom: const TabBar(
-            tabs: [Tab(text: 'Members'), Tab(text: 'Tasks')],
-          ),
+          bottom: TabBar(tabs: tabs),
         ),
         floatingActionButton: canManage
             ? FloatingActionButton(
@@ -328,24 +344,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
                 child: const Icon(Icons.add),
               )
             : null,
-        body: TabBarView(
-          children: [
-            MembersTab(
-              groupId: widget.groupId,
-              ownerId: ownerId,
-              allMembers: membersAll,
-              admins: admins,
-              members: members,
-              canManage: canManage,
-              onRefresh: _fetch,
-            ),
-            TasksTab(
-              currentUserId: current,
-              groupId: widget.groupId,
-              idToName: idToName,
-            ),
-          ],
-        ),
+        body: TabBarView(children: tabViews),
       ),
     );
   }
