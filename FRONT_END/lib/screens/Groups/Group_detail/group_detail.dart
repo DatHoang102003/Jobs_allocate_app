@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:task_manager_app/screens/Tasks/create_task.dart';
+import 'package:task_manager_app/screens/Tasks/tasks_manager.dart';
 import 'package:task_manager_app/services/group_service.dart';
 import 'package:task_manager_app/services/membership_service.dart';
 import 'package:task_manager_app/services/auth_service.dart';
@@ -75,7 +76,13 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
       context: context,
       builder: (_) => Dialog(child: CreateTaskScreen(groupId: widget.groupId)),
     );
-    if (created == true) await _fetch();
+    if (created == true) {
+      // 1) Refresh your “detail” map (so TasksTab’s count/header is correct):
+      await _fetch();
+
+      // 2) ALSO tell the TasksProvider to reload from backend so the list updates:
+      await context.read<TasksProvider>().loadTasksByGroup(widget.groupId);
+    }
   }
 
   Future<void> _addMember() async {
@@ -292,7 +299,11 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
         groupId: widget.groupId,
         idToName: idToName,
       ),
-      if (canManage) JoinRequestsTab(groupId: widget.groupId, onUpdate: _fetch),
+      if (canManage)
+        JoinRequestsTab(
+          groupId: widget.groupId,
+          onUpdate: _fetch,
+        ),
     ];
 
     return DefaultTabController(
