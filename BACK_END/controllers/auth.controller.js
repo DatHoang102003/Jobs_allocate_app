@@ -1,6 +1,32 @@
 // controllers/auth.controller.js
 import { pbAdmin, createUserClient } from "../services/pocketbase.js";
 
+export async function requireAuth(req, res, next) {
+  try {
+    const authHeader = req.headers.authorization || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+
+    if (!token) {
+      return res.status(401).json({ error: "Missing Bearer token" });
+    }
+
+    // create a brand-new PB client authenticated with this token
+    const pbUser = await createUserClient(token);
+
+    // make sure the token is still valid (will throw if not)
+    await pbUser.collection("users").authRefresh();
+
+    // expose to downstream controllers
+    req.user = pbUser.authStore.model; // { id, email, name, … }
+    req.pb = pbUser;
+
+    return next();
+  } catch (err) {
+    console.error("Auth error:", err.response?.data || err);
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+}
+
 export async function registerUser(req, res) {
   const { email, password, name } = req.body;
   try {

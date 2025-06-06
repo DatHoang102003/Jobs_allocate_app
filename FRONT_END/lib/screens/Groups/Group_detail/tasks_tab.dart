@@ -58,6 +58,7 @@ class _TasksTabState extends State<TasksTab> {
             final isCurrentUser = assigneeId == widget.currentUserId;
             final status = t['status'] as String? ?? 'pending';
             final taskId = t['id'] as String;
+            final creatorId = t['createdBy'] as String?;
 
             return Card(
               margin: const EdgeInsets.symmetric(vertical: 8),
@@ -79,6 +80,52 @@ class _TasksTabState extends State<TasksTab> {
                             ),
                           ),
                         ),
+                        // ────────────────────────────────────────────────
+                        // Show delete button if current user is the creator
+                        if (creatorId == widget.currentUserId)
+                          IconButton(
+                            icon: const Icon(Icons.delete, color: Colors.red),
+                            onPressed: () async {
+                              final shouldDelete = await showDialog<bool>(
+                                context: context,
+                                builder: (ctx) => AlertDialog(
+                                  title: const Text('Confirm delete'),
+                                  content: const Text(
+                                      'Are you sure you want to delete this task?'),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () =>
+                                          Navigator.of(ctx).pop(false),
+                                      child: const Text('CANCEL'),
+                                    ),
+                                    TextButton(
+                                      onPressed: () =>
+                                          Navigator.of(ctx).pop(true),
+                                      child: const Text('DELETE'),
+                                    ),
+                                  ],
+                                ),
+                              );
+
+                              if (shouldDelete == true) {
+                                try {
+                                  await context
+                                      .read<TasksProvider>()
+                                      .deleteTask(taskId);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Task deleted'),
+                                    ),
+                                  );
+                                } catch (e) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text('Error: $e')),
+                                  );
+                                }
+                              }
+                            },
+                          ),
+                        // ────────────────────────────────────────────────
                       ],
                     ),
                     const SizedBox(height: 8),
@@ -114,10 +161,11 @@ class _TasksTabState extends State<TasksTab> {
                                   DropdownMenuItem(
                                       value: 'pending', child: Text('Pending')),
                                   DropdownMenuItem(
-                                      value: 'todo',
+                                      value: 'in_progress',
                                       child: Text('In Progress')),
                                   DropdownMenuItem(
-                                      value: 'done', child: Text('Completed')),
+                                      value: 'completed',
+                                      child: Text('Completed')),
                                 ],
                               ),
                             ],

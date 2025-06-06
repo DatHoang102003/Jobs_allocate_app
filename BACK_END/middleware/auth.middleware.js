@@ -19,6 +19,8 @@ export async function requireAuth(req, res, next) {
     req.pbUser = pbUser;
     req.user = pbUser.authStore.model;
 
+    req.pb = pbUser;
+
     return next();
   } catch (err) {
     return res.status(401).json({ error: "Unauthorized: " + err.message });
