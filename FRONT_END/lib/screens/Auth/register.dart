@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:task_manager_app/services/auth_service.dart';
 import '../../navigation_manager.dart';
 import 'login.dart';
@@ -20,7 +21,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _obscurePassword = true;
   bool _obscureConfirm = true;
 
-  void _handleRegister() async {
+  static final _emailRx = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
+  // Only require length ≥6 and no spaces
+  static final _pwRx = RegExp(r'^[^\s]{6,}$');
+
+  void _showError(String msg) =>
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+
+  Future<void> _handleRegister() async {
     final name = _fullNameController.text.trim();
     final email = _emailController.text.trim();
     final password = _passwordController.text;
@@ -30,46 +38,39 @@ class _RegisterScreenState extends State<RegisterScreen> {
         email.isEmpty ||
         password.isEmpty ||
         confirmPassword.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please enter all required information")),
-      );
+      _showError("Please enter all required information.");
       return;
     }
-    if (password.length < 6) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Password must be at least 6 characters")),
+    if (!_emailRx.hasMatch(email)) {
+      _showError("Invalid email format.");
+      return;
+    }
+    if (!_pwRx.hasMatch(password)) {
+      _showError(
+        "Password must be at least 6 characters and contain no spaces.",
       );
       return;
     }
     if (password != confirmPassword) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Passwords do not match")),
-      );
+      _showError("Passwords do not match.");
       return;
     }
 
-    final success =
-        await AuthService.registerUser(name, email, password, confirmPassword);
-
-    if (success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text("Registration successful. Please log in.")),
-      );
+    try {
+      await AuthService.registerUser(name, email, password, confirmPassword);
+      _showError("Registration successful. Please log in.");
       NavigationManager.push(const LoginScreen());
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Registration failed. Please try again.")),
-      );
+    } catch (e) {
+      _showError(e.toString());
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFEDE8E6), // màu nền nhạt như hình
+      backgroundColor: const Color(0xFFEDE8E6),
       body: SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 32),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -97,6 +98,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
               // Full Name
               TextField(
                 controller: _fullNameController,
+                inputFormatters: [
+                  FilteringTextInputFormatter.deny(RegExp(r'\s')),
+                ],
                 decoration: InputDecoration(
                   hintText: "Enter your full name",
                   border: OutlineInputBorder(
@@ -111,6 +115,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
               // Email
               TextField(
                 controller: _emailController,
+                keyboardType: TextInputType.emailAddress,
+                inputFormatters: [
+                  FilteringTextInputFormatter.deny(RegExp(r'\s')),
+                ],
                 decoration: InputDecoration(
                   hintText: "Enter your email",
                   border: OutlineInputBorder(
@@ -126,19 +134,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
               TextField(
                 controller: _passwordController,
                 obscureText: _obscurePassword,
+                inputFormatters: [
+                  FilteringTextInputFormatter.deny(RegExp(r'\s')),
+                ],
                 decoration: InputDecoration(
                   hintText: "Enter password",
                   suffixIcon: IconButton(
-                    icon: Icon(
-                      _obscurePassword
-                          ? Icons.visibility_off
-                          : Icons.visibility,
-                    ),
-                    onPressed: () {
-                      setState(() {
-                        _obscurePassword = !_obscurePassword;
-                      });
-                    },
+                    icon: Icon(_obscurePassword
+                        ? Icons.visibility_off
+                        : Icons.visibility),
+                    onPressed: () =>
+                        setState(() => _obscurePassword = !_obscurePassword),
                   ),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -153,17 +159,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
               TextField(
                 controller: _confirmPasswordController,
                 obscureText: _obscureConfirm,
+                inputFormatters: [
+                  FilteringTextInputFormatter.deny(RegExp(r'\s')),
+                ],
                 decoration: InputDecoration(
                   hintText: "Confirm password",
                   suffixIcon: IconButton(
-                    icon: Icon(
-                      _obscureConfirm ? Icons.visibility_off : Icons.visibility,
-                    ),
-                    onPressed: () {
-                      setState(() {
-                        _obscureConfirm = !_obscureConfirm;
-                      });
-                    },
+                    icon: Icon(_obscureConfirm
+                        ? Icons.visibility_off
+                        : Icons.visibility),
+                    onPressed: () =>
+                        setState(() => _obscureConfirm = !_obscureConfirm),
                   ),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -179,11 +185,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 width: double.infinity,
                 height: 48,
                 child: ElevatedButton(
-                  onPressed: () {
-                    _handleRegister();
-                  },
+                  onPressed: _handleRegister,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFA3DAD6), // màu xanh nhạt
+                    backgroundColor: const Color(0xFFA3DAD6),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -202,9 +206,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 children: [
                   const Text("Already have an Account? "),
                   GestureDetector(
-                    onTap: () {
-                      NavigationManager.push(const LoginScreen());
-                    },
+                    onTap: () => NavigationManager.push(const LoginScreen()),
                     child: const Text(
                       "Signin",
                       style: TextStyle(
@@ -214,7 +216,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     ),
                   ),
                 ],
-              )
+              ),
             ],
           ),
         ),

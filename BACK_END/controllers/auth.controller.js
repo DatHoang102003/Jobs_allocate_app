@@ -1,5 +1,7 @@
 // controllers/auth.controller.js
 import { pbAdmin, createUserClient } from "../services/pocketbase.js";
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const weakPass = /^[^\s]{6,}$/;
 
 export async function requireAuth(req, res, next) {
   try {
@@ -28,9 +30,27 @@ export async function requireAuth(req, res, next) {
 }
 
 export async function registerUser(req, res) {
-  const { email, password, name } = req.body;
+  const { email, password, name } = req.body || {};
+
+  // basic field presence
+  if (!email || !password || !name) {
+    return res
+      .status(400)
+      .json({ error: "Email, name, and password required." });
+  }
+  // email format
+  if (!emailRegex.test(email)) {
+    return res.status(400).json({ error: "Invalid email." });
+  }
+  // password strength
+  if (!weakPass.test(password)) {
+    return res.status(400).json({
+      error:
+        "Password must be at least 6 characters long and contain no spaces.",
+    });
+  }
+
   try {
-    // Use the admin client to bypass any create rules
     const user = await pbAdmin.collection("users").create({
       email,
       password,
@@ -40,27 +60,52 @@ export async function registerUser(req, res) {
     });
     return res.status(201).json(user);
   } catch (err) {
+    let msg;
+    if (err?.response?.data?.data) {
+      msg = Object.values(err.response.data.data)
+        .map((v) => v.message)
+        .join(" ");
+    } else {
+      msg = err?.response?.data?.message || err.message || "";
+      if (msg.startsWith("Failed to create record")) {
+        msg = "Registration failed: email may already exist or data invalid.";
+      }
+      if (!msg) msg = "Registration failed. Please try again.";
+    }
     console.error("Register error:", err.response?.data || err);
-    return res.status(400).json({ error: "Failed to create record." });
+    return res.status(400).json({ error: msg });
   }
 }
 
 export async function loginUser(req, res) {
-  const { email, password } = req.body;
+  const { email, password } = req.body || {};
+
+  if (!email || !password) {
+    return res.status(400).json({ error: "Email and password are required." });
+  }
+
+  if (!emailRegex.test(email) || password.includes(" ")) {
+    return res.status(400).json({ error: "Invalid email or password format." });
+  }
+
   try {
-    // Use a temporary PocketBase client to authenticate the user
-    const pbUser = await createUserClient(null); // we'll auth momentarily
-    const authData = await pbUser
+    const pbUser = await createUserClient(null);
+    const auth = await pbUser
       .collection("users")
       .authWithPassword(email, password);
 
-    // pbUser.authStore now holds the valid token and user model
-    const token = authData.token;
-    const user = authData.record;
-
-    return res.json({ token, user });
+    return res.json({ token: auth.token, user: auth.record });
   } catch (err) {
+    let msg = err?.response?.data?.message || err.message || "";
+
+    if (msg.startsWith("Failed to authenticate")) {
+      msg = "Incorrect email or password.";
+    }
+    if (!msg) {
+      msg = "Login failed. Please try again.";
+    }
+
     console.error("Login error:", err.response?.data || err);
-    return res.status(401).json({ error: err.message });
+    return res.status(401).json({ error: msg });
   }
 }

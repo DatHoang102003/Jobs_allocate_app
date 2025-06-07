@@ -45,7 +45,7 @@ class AuthService {
   }
 
   /* ───────── login ───────── */
-  static Future<bool> loginUser(String email, String password) async {
+  static Future<void> loginUser(String email, String password) async {
     final url = Uri.parse("$_baseUrl/auth/login");
 
     try {
@@ -66,17 +66,25 @@ class AuthService {
 
         _cachedToken = token;
         _cachedUserId = user['id'] as String;
-        return true;
+        return; // success
       }
-      return false;
-    } catch (_) {
+
+      // non-200 → forward backend error
+      final msg =
+          jsonDecode(res.body)['error'] ?? 'Login failed. Please try again.';
+      throw msg;
+    } catch (e) {
       rethrow;
     }
   }
 
   /* ───────── register ───────── */
-  static Future<bool> registerUser(String name, String email, String password,
-      String passwordConfirm) async {
+  static Future<void> registerUser(
+    String name,
+    String email,
+    String password,
+    String passwordConfirm,
+  ) async {
     final url = Uri.parse("$_baseUrl/auth/register");
     final res = await http.post(
       url,
@@ -88,7 +96,13 @@ class AuthService {
         "passwordConfirm": passwordConfirm,
       }),
     );
-    return res.statusCode == 201;
+
+    if (res.statusCode == 201) return; // created successfully
+
+    // otherwise throw backend validation message
+    final msg = jsonDecode(res.body)['error'] ??
+        'Registration failed. Please try again.';
+    throw msg;
   }
 
   /* ───────── logout ───────── */

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:task_manager_app/services/auth_service.dart';
 import '../../navigation_manager.dart';
 import 'register.dart';
@@ -16,25 +17,30 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
 
-  void _handleLogin() async {
+  static final _emailRx = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
+
+  void _showError(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  Future<void> _handleLogin() async {
     final email = _emailController.text.trim();
     final password = _passwordController.text;
 
     if (email.isEmpty || password.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please enter your email and password")),
-      );
+      _showError("Please enter your email and password.");
+      return;
+    }
+    if (!_emailRx.hasMatch(email) || password.contains(' ')) {
+      _showError("Invalid email or password format.");
       return;
     }
 
-    final success = await AuthService.loginUser(email, password);
-
-    if (success) {
+    try {
+      await AuthService.loginUser(email, password); // throws on error
       NavigationManager.push(const HomeScreen());
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Login failed. Please try again.")),
-      );
+    } catch (e) {
+      _showError(e.toString());
     }
   }
 
@@ -58,14 +64,14 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
               const SizedBox(height: 20),
-              SizedBox(
-                height: 160,
-                child:
-                    Icon(Icons.account_circle, size: 150, color: Colors.black),
-              ),
+              const Icon(Icons.account_circle, size: 150, color: Colors.black),
               const SizedBox(height: 20),
               TextField(
                 controller: _emailController,
+                keyboardType: TextInputType.emailAddress,
+                inputFormatters: [
+                  FilteringTextInputFormatter.deny(RegExp(r'\s')),
+                ],
                 decoration: InputDecoration(
                   hintText: "Enter your email",
                   border: OutlineInputBorder(
@@ -79,18 +85,17 @@ class _LoginScreenState extends State<LoginScreen> {
               TextField(
                 controller: _passwordController,
                 obscureText: _obscurePassword,
+                inputFormatters: [
+                  FilteringTextInputFormatter.deny(RegExp(r'\s')),
+                ],
                 decoration: InputDecoration(
                   hintText: "Enter password",
                   suffixIcon: IconButton(
-                    icon: Icon(
-                      _obscurePassword
-                          ? Icons.visibility_off
-                          : Icons.visibility,
-                    ),
+                    icon: Icon(_obscurePassword
+                        ? Icons.visibility_off
+                        : Icons.visibility),
                     onPressed: () {
-                      setState(() {
-                        _obscurePassword = !_obscurePassword;
-                      });
+                      setState(() => _obscurePassword = !_obscurePassword);
                     },
                   ),
                   border: OutlineInputBorder(
@@ -104,9 +109,7 @@ class _LoginScreenState extends State<LoginScreen> {
               Align(
                 alignment: Alignment.centerRight,
                 child: TextButton(
-                  onPressed: () {
-                    // TODO: Forgot password
-                  },
+                  onPressed: () {/* TODO: Forgot password */},
                   child: const Text(
                     "Forgot password",
                     style: TextStyle(color: Color(0xFF9AA4B2)),
@@ -137,9 +140,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 children: [
                   const Text("Don't have account? "),
                   GestureDetector(
-                    onTap: () {
-                      NavigationManager.push(const RegisterScreen());
-                    },
+                    onTap: () => NavigationManager.push(const RegisterScreen()),
                     child: const Text(
                       "Sign up",
                       style: TextStyle(

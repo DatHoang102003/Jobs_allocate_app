@@ -2,34 +2,41 @@ import 'package:flutter/foundation.dart';
 import '../../services/auth_service.dart';
 
 class AuthManager extends ChangeNotifier {
-  bool _isLoading = false;
-  bool _isAuthenticated = false;
+  bool _isLoading        = false;
+  bool _isAuthenticated  = false;
   String? _userId;
+  String? _lastError;               // optional: expose recent error
 
-  bool get isLoading => _isLoading;
+  bool get isLoading       => _isLoading;
   bool get isAuthenticated => _isAuthenticated;
-  String? get userId => _userId;
+  String? get userId       => _userId;
+  String? get lastError    => _lastError;
 
-  /// Khởi tạo và kiểm tra trạng thái đăng nhập hiện tại
+  /* ───────── init from SharedPreferences ───────── */
   Future<void> init() async {
     await AuthService.init();
     final token = await AuthService.getToken();
-    final uid = await AuthService.getUserId();
+    final uid   = await AuthService.getUserId();
 
     _isAuthenticated = token.isNotEmpty && uid.isNotEmpty;
-    _userId = uid.isNotEmpty ? uid : null;
+    _userId          = uid.isNotEmpty ? uid : null;
     notifyListeners();
   }
 
-  /// Đăng nhập người dùng
+  /* ───────── login ───────── */
   Future<bool> login(String email, String password) async {
-    _isLoading = true;
+    _isLoading  = true;
+    _lastError  = null;
     notifyListeners();
 
-    final success = await AuthService.loginUser(email, password);
-    if (success) {
-      _userId = await AuthService.getUserId();
+    bool success = false;
+    try {
+      await AuthService.loginUser(email, password);   // throws on failure
+      _userId          = await AuthService.getUserId();
       _isAuthenticated = true;
+      success = true;
+    } catch (e) {
+      _lastError = e.toString();
     }
 
     _isLoading = false;
@@ -37,24 +44,34 @@ class AuthManager extends ChangeNotifier {
     return success;
   }
 
-  /// Đăng ký người dùng mới
-  Future<bool> register(String name, String email, String password,
-      String confirmPassword) async {
+  /* ───────── register ───────── */
+  Future<bool> register(
+    String name,
+    String email,
+    String password,
+    String confirmPassword,
+  ) async {
     _isLoading = true;
+    _lastError = null;
     notifyListeners();
 
-    final success =
-        await AuthService.registerUser(name, email, password, confirmPassword);
+    bool success = false;
+    try {
+      await AuthService.registerUser(name, email, password, confirmPassword);
+      success = true;                          // registration OK
+    } catch (e) {
+      _lastError = e.toString();
+    }
 
     _isLoading = false;
     notifyListeners();
     return success;
   }
 
-  /// Đăng xuất người dùng
+  /* ───────── logout ───────── */
   Future<void> logout() async {
     await AuthService.logoutUser();
-    _userId = null;
+    _userId          = null;
     _isAuthenticated = false;
     notifyListeners();
   }
