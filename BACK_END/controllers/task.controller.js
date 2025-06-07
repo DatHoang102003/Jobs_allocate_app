@@ -1,3 +1,4 @@
+
 export async function createTask(req, res) {
   const pbUser = req.pbUser;
   const { groupId } = req.params;
@@ -71,34 +72,16 @@ export async function listTasksByGroup(req, res) {
    PATCH /tasks/:taskId/status
 ========================= */
 export async function updateTaskStatus(req, res) {
+  const pbUser = req.pbUser;
   const { taskId } = req.params;
-  const { status } = req.body;
-  const userId = req.user.id; // set by requireAuth
-
-  // 1) validate status
-  const allowed = ["pending", "in_progress", "completed"];
-  if (!allowed.includes(status)) {
-    return res.status(400).json({ error: "Invalid status" });
-  }
+  const { status } = req.body; // "todo" | "doing" | "done"
 
   try {
-    // 2) fetch task with the per-request client
-    const task = await req.pb
-      .collection("tasks")
-      .getOne(taskId, { expand: "group" });
-
-    if (!task) return res.status(404).json({ error: "Task not found" });
-
-    const isAssignee = task.assignee === userId;
-    if (!isAssignee) return res.status(403).json({ error: "Forbidden" });
-
-    // 3) update
-    const updated = await req.pb.collection("tasks").update(taskId, { status });
-
+    const updated = await pbUser.collection("tasks").update(taskId, { status });
     return res.json(updated);
   } catch (err) {
-    console.error("updateTaskStatus", err);
-    return res.status(err.status || 500).json({ error: err.message });
+    console.error("updateTaskStatus error:", err.response?.data || err);
+    return res.status(400).json({ error: err.message });
   }
 }
 
@@ -111,25 +94,11 @@ export async function deleteTask(req, res) {
   const { taskId } = req.params;
 
   try {
-    // Fetch the task first
-    const task = await pbUser.collection("tasks").getOne(taskId);
-    if (!task) {
-      return res.status(404).json({ error: "Task not found" });
-    }
-
-    const me = req.user.id;
-    const isCreator = task.createdBy === me;
-
-    // Only the creator may delete
-    if (!isCreator) {
-      return res.status(403).json({ error: "Forbidden" });
-    }
-
     await pbUser.collection("tasks").delete(taskId);
     return res.json({ ok: true });
   } catch (err) {
     console.error("deleteTask error:", err.response?.data || err);
-    return res.status(err.status || 500).json({ error: err.message });
+    return res.status(400).json({ error: err.message });
   }
 }
 /**
@@ -170,9 +139,7 @@ export async function getTasksForToday(req, res) {
     // Use the provided date or default to today (June 1, 2025, in this case)
     const targetDate = date ? new Date(date) : new Date("2025-06-01T00:00:00Z");
     const startOfDay = new Date(targetDate.setHours(0, 0, 0, 0)).toISOString();
-    const endOfDay = new Date(
-      targetDate.setHours(23, 59, 59, 999)
-    ).toISOString();
+    const endOfDay = new Date(targetDate.setHours(23, 59, 59, 999)).toISOString();
 
     // Filter tasks by the authenticated user and the date range
     const filterString = `createdBy="${req.user.id}" && created >= "${startOfDay}" && created <= "${endOfDay}"`;
@@ -188,54 +155,36 @@ export async function getTasksForToday(req, res) {
     return res.status(400).json({ error: err.message });
   }
 }
-
-/* ───────────────────────────────────────────────
-   PATCH  /tasks/:taskId          (edit a task)
-─────────────────────────────────────────────── */
-export async function updateTask(req, res) {
-  const { taskId } = req.params;
-  const patch = req.body; // {title?, description?, assignee?, deadline?, status?}
+/**
+ * GET /tasks/assigned
+ * Lấy công việc được giao cho người dùng hiện tại
+ * Optional: lọc theo status, groupId, deadline
+ */
+export async function getAssignedTasks(req, res) {
+  const pbUser = req.pbUser;
+  const { status, groupId, deadline, create } = req.query;
 
   try {
-    const record = await req.pbUser.collection("tasks").update(taskId, patch);
+    const filters = [`assignee="${req.user.id}"`];
 
-    res.json(record);
+    if (status) filters.push(`status="${status}"`);
+    if (groupId) filters.push(`group="${groupId}"`);
+    if (deadline) filters.push(`deadline ~ "${deadline}"`);
+    if (create) filters.push(`created ~ "${create}"`); 
+
+    const filterString = filters.join(" && ");
+
+    const tasks = await pbUser.collection("tasks").getFullList({
+      filter: filterString,
+      sort: "-created",
+    });
+
+    return res.json(tasks);
   } catch (err) {
-    console.error("updateTask error:", err);
-    res.status(err.status || 500).json({ error: err.message });
+    console.error("getAssignedTasks error:", err.response?.data || err);
+    return res.status(400).json({ error: err.message });
   }
 }
 
-/* ───────────────────────────────────────────────
-   GET  /groups/:groupId/tasks/summary
-   → { total, todo, doing, done }
-─────────────────────────────────────────────── */
-export async function taskSummary(req, res) {
-  const { groupId } = req.params;
 
-  const statuses = ["pending", "in_progress", "completed"];
-  const counts = {};
 
-  try {
-    // count total
-    counts.total = await req.pbUser
-      .collection("tasks")
-      .getFirstListItem(`group="${groupId}"`, { fields: "count(*)" })
-      .then((r) => r["count"]);
-
-    // count per status
-    for (const s of statuses) {
-      counts[s] = await req.pbUser
-        .collection("tasks")
-        .getFirstListItem(`group="${groupId}" && status="${s}"`, {
-          fields: "count(*)",
-        })
-        .then((r) => r["count"]);
-    }
-
-    res.json(counts);
-  } catch (err) {
-    console.error("taskSummary error:", err);
-    res.status(err.status || 500).json({ error: err.message });
-  }
-}

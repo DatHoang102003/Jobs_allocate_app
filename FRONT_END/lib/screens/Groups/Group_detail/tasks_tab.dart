@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../Tasks/tasks_manager.dart'; // make sure path is correct
+import '../../Tasks/tasks_manager.dart';
 
 class TasksTab extends StatefulWidget {
   final String currentUserId;

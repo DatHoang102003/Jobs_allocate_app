@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import 'tasks_manager.dart'; // Ensure correct path to TasksProvider
+
+import '../Groups/groups_manager.dart';
+import 'tasks_manager.dart'; // đường dẫn đúng tới TasksProvider của bạn
 
 class TaskScreen extends StatefulWidget {
   static const routeName = '/tasks';
-  const TaskScreen({super.key});
+  final DateTime initialDate;
+  const TaskScreen({Key? key, required this.initialDate}) : super(key: key);
 
   @override
   State<TaskScreen> createState() => _TaskScreenState();
@@ -18,7 +22,10 @@ class _TaskScreenState extends State<TaskScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final taskProvider = Provider.of<TasksProvider>(context, listen: false);
-      taskProvider.loadTasksForToday(date: DateTime.now());
+      // nạp tasks cho ngày ban đầu
+      taskProvider.loadTasksForToday(date: widget.initialDate);
+      // và cũng nạp luôn groups (nếu bạn chưa fetch ở nơi khác)
+      Provider.of<GroupsProvider>(context, listen: false).fetchGroups();
     });
   }
 
@@ -26,8 +33,8 @@ class _TaskScreenState extends State<TaskScreen> {
       List<Map<String, dynamic>> tasks, String filter) {
     if (filter == 'All') return tasks;
     return tasks.where((task) {
-      if (filter == 'In Progress') return task['status'] == 'doing';
-      if (filter == 'Completed') return task['status'] == 'done';
+      if (filter == 'In Progress') return task['status'] == 'in_progress';
+      if (filter == 'Completed') return task['status'] == 'completed';
       return false;
     }).toList();
   }
@@ -35,12 +42,21 @@ class _TaskScreenState extends State<TaskScreen> {
   @override
   Widget build(BuildContext context) {
     final taskProvider = Provider.of<TasksProvider>(context);
+    final groupsProvider = Provider.of<GroupsProvider>(context);
+
+    // gom cả admin + member groups
+    final allGroups = [
+      ...groupsProvider.adminGroups,
+      ...groupsProvider.memberGroups,
+    ];
+
+    // lọc tasks theo filter
     final filteredTasks = _filterTasks(taskProvider.tasks, _selectedFilter);
 
     return Scaffold(
       appBar: AppBar(
         title: const Text(
-          'Today\'s Tasks',
+          'Tasks for Today',
           style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black87),
         ),
         backgroundColor: Colors.transparent,
@@ -48,13 +64,12 @@ class _TaskScreenState extends State<TaskScreen> {
         iconTheme: const IconThemeData(color: Colors.black87),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () {
-            Navigator.pop(context);
-          },
+          onPressed: () => Navigator.pop(context),
         ),
       ),
       body: Column(
         children: [
+          // các ChoiceChip
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Row(
@@ -66,6 +81,7 @@ class _TaskScreenState extends State<TaskScreen> {
               ],
             ),
           ),
+          // danh sách task
           Expanded(
             child: taskProvider.isLoading
                 ? const Center(child: CircularProgressIndicator())
@@ -73,7 +89,7 @@ class _TaskScreenState extends State<TaskScreen> {
                     ? Center(
                         child: Text(
                           _selectedFilter == 'All'
-                              ? 'No tasks for today'
+                              ? 'No tasks for ${DateFormat('MMM dd').format(widget.initialDate)}'
                               : 'No $_selectedFilter tasks',
                         ),
                       )
@@ -82,19 +98,29 @@ class _TaskScreenState extends State<TaskScreen> {
                         itemCount: filteredTasks.length,
                         itemBuilder: (context, index) {
                           final task = filteredTasks[index];
-                          final statusColor = task['status'] == 'done'
+
+                          // lookup groupName
+                          final groupId = task['group'] as String? ?? '';
+                          final matched =
+                              allGroups.where((g) => g.id == groupId).toList();
+                          final groupName = matched.isNotEmpty
+                              ? matched.first.name
+                              : 'Unknown';
+
+                          // màu status
+                          final statusColor = task['status'] == 'completed'
                               ? Colors.green
-                              : task['status'] == 'doing'
+                              : task['status'] == 'in_progress'
                                   ? Colors.orange
                                   : Colors.grey;
 
-                          String createdDate = 'N/A';
+                          // deadline
+                          String deadline = 'N/A';
                           try {
-                            if (task['created'] != null) {
+                            if (task['deadline'] != null) {
                               final parsedDate =
-                                  DateTime.parse(task['created']);
-                              createdDate =
-                                  parsedDate.toLocal().toString().split(' ')[0];
+                                  DateTime.parse(task['deadline']);
+                              deadline = DateFormat.yMMMd().format(parsedDate);
                             }
                           } catch (_) {}
 
@@ -116,6 +142,14 @@ class _TaskScreenState extends State<TaskScreen> {
                               subtitle: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
+                                  // hiển thị tên nhóm
+                                  Text(
+                                    'Group: $groupName',
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                  ),
                                   const SizedBox(height: 4),
                                   Text(
                                     'Status: ${task['status'] ?? 'unknown'}',
@@ -135,7 +169,7 @@ class _TaskScreenState extends State<TaskScreen> {
                                 ],
                               ),
                               trailing: Text(
-                                createdDate,
+                                deadline,
                                 style: const TextStyle(
                                   fontSize: 12,
                                   color: Colors.grey,
@@ -155,12 +189,8 @@ class _TaskScreenState extends State<TaskScreen> {
     return ChoiceChip(
       label: Text(label),
       selected: _selectedFilter == label,
-      onSelected: (selected) {
-        if (selected) {
-          setState(() {
-            _selectedFilter = label;
-          });
-        }
+      onSelected: (sel) {
+        if (sel) setState(() => _selectedFilter = label);
       },
       selectedColor: Colors.deepPurple.withOpacity(0.2),
       backgroundColor: Colors.grey.shade200,

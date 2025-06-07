@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 
 import 'navigation_manager.dart';
 import 'screens/Groups/groups.dart';
-import 'screens/home.dart';
+import 'screens/Home/home.dart';
 import 'screens/Tasks/task.dart';
 import 'package:task_manager_app/services/user_service.dart';
 import 'package:task_manager_app/services/auth_service.dart';
@@ -17,10 +17,10 @@ class BottomNavScreen extends StatelessWidget {
     final navigationManager = context.watch<NavigationManager>();
     final selectedIndex = navigationManager.selectedIndex;
 
-    final screens = const [
-      HomeScreen(),
-      GroupScreen(),
-      TaskScreen(),
+    final screens = [
+      const HomeScreen(),
+      const GroupScreen(),
+      TaskScreen(initialDate: DateTime.now()),
     ];
 
     return Scaffold(

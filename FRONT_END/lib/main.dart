@@ -6,8 +6,7 @@ import 'package:task_manager_app/screens/Groups/groups_manager.dart';
 import 'package:task_manager_app/screens/Members/join_manager.dart';
 import 'package:task_manager_app/screens/Members/membership_manager.dart';
 import 'package:task_manager_app/screens/Tasks/tasks_manager.dart';
-import 'package:task_manager_app/screens/home.dart';
-
+import 'package:task_manager_app/screens/Home/home.dart';
 import 'package:task_manager_app/services/user_service.dart';
 import 'package:task_manager_app/navigation_manager.dart';
 import 'package:task_manager_app/navigation.dart'; // BottomNavScreen
@@ -48,7 +47,7 @@ class MyApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => NavigationManager()),
-        ChangeNotifierProvider(create: (_) => GroupsProvider()),
+        ChangeNotifierProvider(create: (_) => GroupsProvider()..fetchGroups()),
         ChangeNotifierProvider(create: (_) => TasksProvider()),
         ChangeNotifierProvider(create: (_) => AuthManager()..init()),
         ChangeNotifierProvider(create: (_) => MemberManager()),
@@ -66,11 +65,21 @@ class MyApp extends StatelessWidget {
         routes: {
           RegisterScreen.routeName: (_) => const RegisterScreen(),
           BottomNavScreen.routeName: (_) => const BottomNavScreen(),
-          TaskScreen.routeName: (_) => const TaskScreen(),
           GroupScreen.routeName: (_) => const GroupScreen(),
           '/login': (_) => const LoginScreen(),
           '/home': (_) => const HomeScreen(),
           '/account': (_) => const AccountScreen(),
+
+          // Updated TaskScreen route to pass initialDate argument
+          TaskScreen.routeName: (ctx) {
+            final args = ModalRoute.of(ctx)!.settings.arguments;
+            final initialDate = args is DateTime ? args : DateTime.now();
+            return ChangeNotifierProvider.value(
+              value: Provider.of<TasksProvider>(ctx, listen: false)
+                ..loadTasksForToday(date: initialDate),
+              child: TaskScreen(initialDate: initialDate),
+            );
+          },
         },
       ),
     );

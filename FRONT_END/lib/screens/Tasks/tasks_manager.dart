@@ -137,4 +137,36 @@ class TasksProvider with ChangeNotifier {
       _setLoading(false);
     }
   }
+
+  /// Lấy danh sách task được giao cho người dùng hiện tại
+  /// Optional: lọc theo status, groupId, deadline (định dạng yyyy-MM-dd)
+  static Future<List<dynamic>> fetchAssignedTasks({
+    String? status,
+    String? groupId,
+    DateTime? deadline,
+    DateTime? create,
+  }) async {
+    try {
+      return await TaskService.getAssignedTasks(
+        status: status,
+        groupId: groupId,
+        deadline: deadline,
+        create: create,
+      );
+    } catch (e) {
+      print('TaskManager.fetchAssignedTasks error: $e');
+      rethrow;
+    }
+  }
+
+  /// Đếm số lượng task theo group (có tùy chọn lọc theo status)
+  Future<int> countTasks(String groupId, {String? status}) async {
+    try {
+      final count = await TaskService.countTasks(groupId, status: status);
+      return count;
+    } catch (e) {
+      debugPrint('countTasks error: $e');
+      rethrow;
+    }
+  }
 }

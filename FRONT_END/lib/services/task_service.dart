@@ -169,4 +169,46 @@ class TaskService {
     final data = jsonDecode(res.body);
     return (data is List) ? data : [data];
   }
+
+  static Future<List<dynamic>> getAssignedTasks({
+    String? status,
+    String? groupId,
+    DateTime? deadline,
+    DateTime? create,
+  }) async {
+    final queryParams = <String, String>{};
+
+    if (status != null && status.isNotEmpty) {
+      queryParams['status'] = status;
+    }
+    if (groupId != null && groupId.isNotEmpty) {
+      queryParams['groupId'] = groupId;
+    }
+    if (deadline != null) {
+      final formattedDeadline =
+          "${deadline.year.toString().padLeft(4, '0')}-${deadline.month.toString().padLeft(2, '0')}-${deadline.day.toString().padLeft(2, '0')}";
+      queryParams['deadline'] = formattedDeadline;
+    }
+    if (create != null) {
+      final formattedCreate =
+          "${create.year.toString().padLeft(4, '0')}-${create.month.toString().padLeft(2, '0')}-${create.day.toString().padLeft(2, '0')}";
+      queryParams['create'] = formattedCreate;
+    }
+
+    final uri = Uri.parse('$_baseUrl/tasks/assigned')
+        .replace(queryParameters: queryParams);
+
+    final res = await http.get(uri, headers: await _headers());
+
+    if (res.statusCode != 200) {
+      throw Exception('Failed to fetch assigned tasks: ${res.body}');
+    }
+
+    final data = jsonDecode(res.body);
+    if (data is List) {
+      return data;
+    } else {
+      return [data]; // fallback nếu server trả về object thay vì mảng
+    }
+  }
 }

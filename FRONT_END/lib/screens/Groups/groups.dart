@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:task_manager_app/screens/Groups/groups_manager.dart';
-import 'package:task_manager_app/screens/home.dart' show CustomDrawer;
+import 'package:task_manager_app/screens/Home/home.dart' show CustomDrawer;
 import '../../models/groups.dart';
 import '../../services/invite_service.dart';
-import '../../services/task_service.dart';
-import 'Group_detail/group_detail.dart';
-import 'package:percent_indicator/circular_percent_indicator.dart';
+import '../Home/Widgets/group_card.dart';
+import '../Members/membership_manager.dart';
+import '../Tasks/tasks_manager.dart';
 
 class GroupScreen extends StatefulWidget {
   static const routeName = '/groups';
@@ -24,7 +24,7 @@ class _GroupScreenState extends State<GroupScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 2, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<GroupsProvider>().fetchGroups();
     });
@@ -56,7 +56,6 @@ class _GroupScreenState extends State<GroupScreen>
           tabs: const [
             Tab(text: "Overview"),
             Tab(text: "Requests"),
-            Tab(text: "Tasks"),
           ],
         ),
       ),
@@ -67,23 +66,32 @@ class _GroupScreenState extends State<GroupScreen>
               children: [
                 _buildOverviewTab(provider),
                 const InviteRequestsTab(),
-                const Center(child: Text("Tasks tab content")),
               ],
             ),
     );
   }
 
   Widget _buildOverviewTab(GroupsProvider provider) {
-    List<Group> groupsToShow;
+    // Lấy danh sách admin và member
+    final admin = provider.adminGroups;
+    final member = provider.memberGroups;
+
+    // Tạo list kết quả
+    late final List<Group> groupsToShow;
     switch (_selectedRole) {
       case 'admin':
-        groupsToShow = provider.adminGroups;
+        groupsToShow = admin;
         break;
       case 'member':
-        groupsToShow = provider.memberGroups;
+        groupsToShow = member;
         break;
       default:
-        groupsToShow = [...provider.adminGroups, ...provider.memberGroups];
+        // Kết hợp mà không trùng: dùng Map theo id
+        final Map<String, Group> uniq = {
+          for (var g in admin) g.id: g,
+          for (var g in member) g.id: g,
+        };
+        groupsToShow = uniq.values.toList();
     }
 
     return Column(
@@ -100,9 +108,7 @@ class _GroupScreenState extends State<GroupScreen>
             ],
             onChanged: (value) {
               if (value != null) {
-                setState(() {
-                  _selectedRole = value;
-                });
+                setState(() => _selectedRole = value);
               }
             },
           ),
@@ -113,124 +119,18 @@ class _GroupScreenState extends State<GroupScreen>
             itemCount: groupsToShow.length,
             itemBuilder: (context, index) {
               final group = groupsToShow[index];
-              return _buildGroupCard(context, group, provider);
+              return GroupCard(
+                group: group,
+                groupProvider: context.watch<GroupsProvider>(),
+                taskProvider: context.watch<TasksProvider>(),
+                memberProvider: context.watch<MemberManager>(),
+              );
             },
           ),
         ),
       ],
     );
   }
-}
-
-Widget _buildGroupCard(
-    BuildContext context, Group group, GroupsProvider provider) {
-  return GestureDetector(
-    onTap: () {
-      provider.setCurrent(group);
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => GroupDetailScreen(groupId: group.id),
-        ),
-      );
-    },
-    child: Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          )
-        ],
-      ),
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 24,
-            backgroundColor: Colors.deepPurple.shade50,
-            child: const Icon(Icons.folder, color: Colors.deepPurple),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(group.name,
-                    style: const TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 4),
-                Text(group.description,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 13, color: Colors.grey)),
-                const SizedBox(height: 4),
-                FutureBuilder<List<int>>(
-                  future: _getTaskCounts(group.id),
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState != ConnectionState.done) {
-                      return const Text("Đang tải...",
-                          style: TextStyle(fontSize: 12, color: Colors.grey));
-                    } else {
-                      final total = snapshot.data![0];
-                      return Text(
-                        "$total Tasks",
-                        style: const TextStyle(
-                            fontSize: 13, color: Colors.black54),
-                      );
-                    }
-                  },
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          FutureBuilder<List<int>>(
-            future: _getTaskCounts(group.id),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState != ConnectionState.done ||
-                  snapshot.hasError) {
-                return CircularPercentIndicator(
-                  radius: 28.0,
-                  lineWidth: 5.0,
-                  percent: 0.0,
-                  center: const Text("0%"),
-                  progressColor: Colors.grey,
-                );
-              } else {
-                final total = snapshot.data![0];
-                final todo = snapshot.data![1];
-                final percent = total == 0 ? 0 : (todo / total).clamp(0.0, 1.0);
-                final percentText = "${(percent * 100).round()}%";
-
-                return CircularPercentIndicator(
-                  radius: 28.0,
-                  lineWidth: 5.0,
-                  percent: percent.toDouble(),
-                  center: Text(percentText,
-                      style: const TextStyle(fontWeight: FontWeight.bold)),
-                  progressColor: Colors.deepPurple,
-                  backgroundColor: Colors.deepPurple.shade100,
-                  animation: true,
-                );
-              }
-            },
-          ),
-        ],
-      ),
-    ),
-  );
-}
-
-/// Helper để fetch cả 2 count: tổng số task và số task có status 'done'
-Future<List<int>> _getTaskCounts(String groupId) async {
-  final total = await TaskService.countTasks(groupId);
-  final todo = await TaskService.countTasks(groupId, status: 'done');
-  return [total, todo];
 }
 
 class InviteRequestsTab extends StatefulWidget {
