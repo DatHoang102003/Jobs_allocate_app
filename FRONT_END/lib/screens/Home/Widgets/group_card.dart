@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../../../models/groups.dart';
 import '../../Groups/groups_manager.dart';
-import '../../Members/membership_manager.dart';
 import '../../Tasks/tasks_manager.dart';
+import '../../Members/membership_manager.dart';
 import '../../Groups/Group_detail/group_detail.dart';
 
-class GroupCard extends StatelessWidget {
+class GroupCard extends StatefulWidget {
   final GroupsProvider groupProvider;
   final TasksProvider taskProvider;
   final MemberManager memberProvider;
@@ -21,28 +21,62 @@ class GroupCard extends StatelessWidget {
   }) : super(key: key);
 
   @override
+  _GroupCardState createState() => _GroupCardState();
+}
+
+class _GroupCardState extends State<GroupCard>
+    with AutomaticKeepAliveClientMixin {
+  late Future<void> _loadFuture;
+  int _total = 0;
+  int _done = 0;
+  List<Map<String, dynamic>> _members = [];
+
+  @override
+  void initState() {
+    super.initState();
+    // Concurrently load counts and members once
+    _loadFuture = Future.wait([
+      widget.taskProvider.countTasks(widget.group.id),
+      widget.taskProvider.countTasks(widget.group.id, status: 'completed'),
+      widget.memberProvider.fetchMembers(widget.group.id),
+    ]).then((results) {
+      _total = results[0] as int;
+      _done = results[1] as int;
+      // after fetchMembers completes, get members list
+      _members = widget.memberProvider.membersOfGroup(widget.group.id);
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<int>>(
-      future: Future.wait([
-        taskProvider.countTasks(group.id),
-        taskProvider.countTasks(group.id, status: 'completed'),
-      ]),
+    super.build(context);
+    return FutureBuilder<void>(
+      future: _loadFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
-          return const Center(child: CircularProgressIndicator());
+          // Placeholder card while loading
+          return Card(
+            margin: const EdgeInsets.symmetric(vertical: 8),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            elevation: 2,
+            child: const Padding(
+              padding: EdgeInsets.all(16),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+          );
         }
-        final total = snapshot.data![0];
-        final done = snapshot.data![1];
-        final pct = total == 0 ? 0.0 : done / total;
-        final members = memberProvider.membersOfGroup(group.id);
+
+        final pct = _total == 0 ? 0.0 : _done / _total;
 
         return InkWell(
           onTap: () {
-            groupProvider.setCurrent(group);
+            widget.groupProvider.setCurrent(widget.group);
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => GroupDetailScreen(groupId: group.id),
+                builder: (_) => GroupDetailScreen(groupId: widget.group.id),
               ),
             );
           },
@@ -58,12 +92,12 @@ class GroupCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Tên group và avatar members
+                  // Group name & avatars
                   Row(
                     children: [
                       Expanded(
                         child: Text(
-                          group.name,
+                          widget.group.name,
                           style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
@@ -71,61 +105,64 @@ class GroupCard extends StatelessWidget {
                         ),
                       ),
                       Row(
-                        children: members.take(3).map((m) {
-                          final url = (m['avatarUrl'] as String?) ?? '';
-                          final name = (m['name'] as String?) ?? '';
-                          return Padding(
-                            padding: const EdgeInsets.only(left: 4),
-                            child: CircleAvatar(
-                              radius: 16,
-                              backgroundImage:
-                                  url.isNotEmpty ? NetworkImage(url) : null,
-                              child: url.isEmpty
-                                  ? Text(
-                                      name.isNotEmpty
-                                          ? name[0].toUpperCase()
-                                          : '?',
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 12,
-                                      ),
-                                    )
-                                  : null,
-                            ),
-                          );
-                        }).toList()
-                          ..addAll(members.length > 3
-                              ? [
-                                  Padding(
-                                    padding: const EdgeInsets.only(left: 4),
-                                    child: CircleAvatar(
-                                      radius: 16,
-                                      backgroundColor: Colors.orange,
-                                      child: Text(
-                                        '+${members.length - 3}',
+                        children: [
+                          for (var m in _members.take(3))
+                            Padding(
+                              padding: const EdgeInsets.only(left: 4),
+                              child: CircleAvatar(
+                                radius: 16,
+                                backgroundImage:
+                                    (m['avatarUrl'] as String?)?.isNotEmpty ==
+                                            true
+                                        ? NetworkImage(m['avatarUrl'] as String)
+                                        : null,
+                                child: (m['avatarUrl'] as String?)?.isEmpty ==
+                                        true
+                                    ? Text(
+                                        (m['name'] as String?)?.isNotEmpty ==
+                                                true
+                                            ? (m['name']![0].toUpperCase())
+                                            : '?',
                                         style: const TextStyle(
                                           color: Colors.white,
                                           fontSize: 12,
                                         ),
-                                      ),
-                                    ),
-                                  )
-                                ]
-                              : []),
+                                      )
+                                    : null,
+                              ),
+                            ),
+                          if (_members.length > 3)
+                            Padding(
+                              padding: const EdgeInsets.only(left: 4),
+                              child: CircleAvatar(
+                                radius: 16,
+                                backgroundColor: Theme.of(context).primaryColor,
+                                child: Text(
+                                  '+${_members.length - 3}',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
                     ],
                   ),
 
-                  // Mô tả (nếu có)
-                  if (group.description != null) ...[
+                  // Description
+                  if (widget.group.description != null &&
+                      widget.group.description!.isNotEmpty) ...[
                     const SizedBox(height: 12),
                     Text(
-                      group.description!,
+                      widget.group.description!,
                       style: TextStyle(color: Colors.grey.shade600),
                     ),
                   ],
 
                   const SizedBox(height: 16),
+
                   // Progress bar
                   Row(
                     children: [
@@ -141,13 +178,12 @@ class GroupCard extends StatelessWidget {
                         child: LinearProgressIndicator(
                           value: pct,
                           backgroundColor: Colors.grey.shade300,
-                          color: Theme.of(context).primaryColor,
                           minHeight: 6,
                         ),
                       ),
                       const SizedBox(width: 12),
                       Text(
-                        '$done/$total tasks',
+                        '$_done/$_total tasks',
                         style: TextStyle(color: Colors.grey.shade600),
                       ),
                     ],
@@ -160,4 +196,7 @@ class GroupCard extends StatelessWidget {
       },
     );
   }
+
+  @override
+  bool get wantKeepAlive => true;
 }

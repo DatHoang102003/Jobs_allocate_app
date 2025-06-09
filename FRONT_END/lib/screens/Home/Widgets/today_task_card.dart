@@ -26,6 +26,13 @@ class TodayTaskCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (taskProvider.isLoading) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 32),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     final total = taskProvider.tasks.length;
     final done =
         taskProvider.tasks.where((t) => t['status'] == 'completed').length;
@@ -47,7 +54,9 @@ class TodayTaskCard extends StatelessWidget {
                   date.day == selectedDate.day;
               return GestureDetector(
                 onTap: () => onDateSelected(date),
-                child: Container(
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeInOut,
                   width: 48,
                   decoration: BoxDecoration(
                     color: sel ? Colors.white : Colors.transparent,
@@ -60,22 +69,26 @@ class TodayTaskCard extends StatelessWidget {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text(
-                        DateFormat('EEE').format(date),
+                      AnimatedDefaultTextStyle(
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeInOut,
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: sel ? FontWeight.bold : FontWeight.normal,
                           color: sel ? Colors.black : Colors.grey,
                         ),
+                        child: Text(DateFormat('EEE').format(date)),
                       ),
                       const SizedBox(height: 4),
-                      Text(
-                        date.day.toString(),
+                      AnimatedDefaultTextStyle(
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeInOut,
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: sel ? FontWeight.bold : FontWeight.normal,
                           color: sel ? Colors.black : Colors.grey,
                         ),
+                        child: Text(date.day.toString()),
                       ),
                     ],
                   ),
@@ -125,19 +138,33 @@ class TodayTaskCard extends StatelessWidget {
                     SizedBox(
                       width: 60,
                       height: 60,
-                      child: CircularProgressIndicator(
-                        value: percent / 100,
-                        color: Colors.white,
-                        backgroundColor: Colors.white24,
-                        strokeWidth: 6,
+                      child: TweenAnimationBuilder<double>(
+                        tween: Tween(begin: 0.0, end: percent / 100),
+                        duration: const Duration(milliseconds: 500),
+                        curve: Curves.easeOut,
+                        builder: (context, value, child) {
+                          return CircularProgressIndicator(
+                            value: value,
+                            color: Colors.white,
+                            backgroundColor: Colors.white24,
+                            strokeWidth: 6,
+                          );
+                        },
                       ),
                     ),
-                    Text(
-                      '$percent%',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
+                    TweenAnimationBuilder<double>(
+                      tween: Tween(begin: 0.0, end: percent.toDouble()),
+                      duration: const Duration(milliseconds: 500),
+                      curve: Curves.easeOut,
+                      builder: (context, value, child) {
+                        return Text(
+                          '${value.round()}%',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        );
+                      },
                     ),
                   ],
                 ),

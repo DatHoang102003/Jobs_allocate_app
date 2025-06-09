@@ -14,6 +14,7 @@ import {
 } from "../controllers/task.controller.js";
 
 const router = express.Router();
+
 /**
  * @swagger
  * tags:
@@ -56,6 +57,13 @@ const router = express.Router();
  *         description: Task created
  */
 
+// Create a task in a group
+router.post(
+  "/groups/:groupId/tasks",
+  requireAuth,
+  createTask
+);
+
 /**
  * @swagger
  * /groups/{groupId}/tasks:
@@ -90,53 +98,12 @@ const router = express.Router();
  *       200:
  *         description: List of tasks
  */
-
-/**
- * @swagger
- * /tasks/{taskId}/status:
- *   patch:
- *     summary: Update the status of a task
- *     tags: [Tasks]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: taskId
- *         required: true
- *         schema:
- *           type: string
- *     requestBody:
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               status:
- *                 type: string
- *                 enum: [todo, doing, done]
- *     responses:
- *       200:
- *         description: Task updated
- */
-
-/**
- * @swagger
- * /tasks/{taskId}:
- *   delete:
- *     summary: Delete a task
- *     tags: [Tasks]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: taskId
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: Task deleted
- */
+// List all tasks in a group
+router.get(
+  "/groups/:groupId/tasks",
+  requireAuth,
+  listTasksByGroup
+);
 
 /**
  * @swagger
@@ -167,6 +134,13 @@ const router = express.Router();
  *                 count:
  *                   type: integer
  */
+// Count number of tasks in a group
+router.get(
+  "/groups/:groupId/tasks/count",
+  requireAuth,
+  countTasksByGroup
+);
+
 /**
  * @swagger
  * /tasks/today:
@@ -183,25 +157,98 @@ const router = express.Router();
  *             schema:
  *               type: array
  *               items:
- *                 type: object
- *                 properties:
- *                   id:
- *                     type: string
- *                   title:
- *                     type: string
- *                   description:
- *                     type: string
- *                   status:
- *                     type: string
- *                     enum: [todo, doing, done]
- *                   deadline:
- *                     type: string
- *                     format: date-time
- *                   assignee:
- *                     type: string
+ *                 $ref: '#/components/schemas/Task'
  *       401:
  *         description: Unauthorized
  */
+// Fetch tasks for the current day
+router.get(
+  "/tasks/today",
+  requireAuth,
+  getTasksForToday
+);
+
+/**
+ * @swagger
+ * /tasks/assigned:
+ *   get:
+ *     summary: Lấy công việc được giao cho người dùng hiện tại
+ *     tags: [Tasks]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: groupId
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: deadline
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *       - in: query
+ *         name: create
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *     responses:
+ *       200:
+ *         description: Danh sách task được giao
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/Task'
+ *       400:
+ *         description: Yêu cầu không hợp lệ
+ *       401:
+ *         description: Unauthorized
+ */
+// Lấy công việc được giao cho người dùng hiện tại
+router.get(
+  "/tasks/assigned",
+  requireAuth,
+  getAssignedTasks
+);
+
+/**
+ * @swagger
+ * /tasks/{taskId}:
+ *   get:
+ *     summary: Lấy chi tiết task theo ID
+ *     tags: [Tasks]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: taskId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID của task
+ *     responses:
+ *       200:
+ *         description: Chi tiết task, bao gồm thông tin assignee nếu có
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/TaskDetail'
+ *       400:
+ *         description: Yêu cầu không hợp lệ
+ *       404:
+ *         description: Task không tồn tại
+ */
+// Lấy chi tiết một task theo ID
+router.get(
+  "/tasks/:taskId",
+  requireAuth,
+  getTaskDetail
+);
 
 /**
  * @swagger
@@ -230,57 +277,18 @@ const router = express.Router();
  *       400:
  *         description: Yêu cầu không hợp lệ
  */
-/**
- * @swagger
- * /tasks/assigned:
- *   get:
- *     summary: Lấy công việc được giao cho người dùng hiện tại
- *     tags: [Tasks]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: query
- *         name: status
- *         schema:
- *           type: string
- *         description: 'Lọc theo trạng thái (todo, doing, done)'
- *       - in: query
- *         name: groupId
- *         schema:
- *           type: string
- *         description: 'Lọc theo group ID'
- *       - in: query
- *         name: deadline
- *         schema:
- *           type: string
- *           format: date-time
- *         description: 'Lọc theo deadline (ví dụ: "2025-06-10")'
- *       - in: query
- *         name: create
- *         schema:
- *           type: string
- *           format: date-time
- *         description: 'Lọc theo ngày tạo (ví dụ: "2025-06-01")'
- *     responses:
- *       200:
- *         description: 'Danh sách task được giao'
- *         content:
- *           application/json:
- *             schema:
- *               type: array
- *               items:
- *                 $ref: '#/components/schemas/Task'
- *       400:
- *         description: 'Yêu cầu không hợp lệ'
- *       401:
- *         description: 'Unauthorized'
- */
+// Lấy thông tin assignee của task
+router.get(
+  "/tasks/:taskId/assignee",
+  requireAuth,
+  getAssigneeInfo
+);
 
 /**
  * @swagger
  * /tasks/{taskId}:
- *   get:
- *     summary: Lấy chi tiết task theo ID
+ *   patch:
+ *     summary: Update full task (if you expose edit screen)
  *     tags: [Tasks]
  *     security:
  *       - bearerAuth: []
@@ -290,66 +298,45 @@ const router = express.Router();
  *         required: true
  *         schema:
  *           type: string
- *         description: ID của task
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/TaskUpdate'
  *     responses:
  *       200:
- *         description: Chi tiết task, bao gồm thông tin assignee nếu có
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 id:
- *                   type: string
- *                 group:
- *                   type: string
- *                 title:
- *                   type: string
- *                 description:
- *                   type: string
- *                 assignee:
- *                   type: string
- *                   nullable: true
- *                 status:
- *                   type: string
- *                   enum: [pending, todo, doing, done]
- *                 deadline:
- *                   type: string
- *                   format: date-time
- *                 createdBy:
- *                   type: string
- *                 created:
- *                   type: string
- *                   format: date-time
- *                 updated:
- *                   type: string
- *                   format: date-time
- *                 assigneeInfo:
- *                   $ref: '#/components/schemas/User'
- *       400:
- *         description: Yêu cầu không hợp lệ
- *       404:
- *         description: Task không tồn tại
+ *         description: Task updated
  */
-router.get("/tasks/:taskId", requireAuth, getTaskDetail);
-router.get("/tasks/assigned", requireAuth, getAssignedTasks);
+// (optional) full edit
+router.patch(
+  "/tasks/:taskId",
+  requireAuth,
+  updateTaskStatus // or your full update handler
+);
 
-router.get("/tasks/:taskId/assignee", requireAuth,getAssigneeInfo);
-// Create a task in a group
-router.post("/groups/:groupId/tasks", requireAuth, createTask);
-
-// List all tasks in a group
-router.get("/groups/:groupId/tasks", requireAuth, listTasksByGroup);
-
-// Update only the status of a task
-router.patch("/tasks/:taskId/status", requireAuth, updateTaskStatus);
-
+/**
+ * @swagger
+ * /tasks/{taskId}:
+ *   delete:
+ *     summary: Delete a task
+ *     tags: [Tasks]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: taskId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Task deleted
+ */
 // Delete a task
-router.delete("/tasks/:taskId", requireAuth, deleteTask);
-
-// Count number of tasks in a group
-router.get("/groups/:groupId/tasks/count", requireAuth, countTasksByGroup);
-// Fetch tasks for the current day
-router.get("/tasks/today", requireAuth, getTasksForToday);
+router.delete(
+  "/tasks/:taskId",
+  requireAuth,
+  deleteTask
+);
 
 export default router;
