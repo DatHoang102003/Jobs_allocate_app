@@ -211,4 +211,33 @@ class TaskService {
       return [data]; // fallback nếu server trả về object thay vì mảng
     }
   }
+
+  /* ─────────────────────────────
+     FETCH ASSIGNEE INFO
+     GET /tasks/:taskId/assignee
+  ───────────────────────────── */
+  static Future<Map<String, dynamic>> getAssigneeInfo(String taskId) async {
+    // Tạo URI
+    final uri = Uri.parse('$_baseUrl/tasks/$taskId/assignee');
+    // Gọi API
+    final res = await http.get(uri, headers: await _headers());
+    // Xử lý lỗi
+    if (res.statusCode != 200) {
+      throw Exception('Failed to fetch assignee info: ${res.body}');
+    }
+    // Parse JSON và trả về
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  /* ─────────────────────────────
+     DETAIL (GET /tasks/:id)
+  ───────────────────────────── */
+  static Future<Map<String, dynamic>> getTaskDetail(String taskId) async {
+    final uri = Uri.parse('$_baseUrl/tasks/$taskId');
+    final res = await http.get(uri, headers: await _headers());
+    if (res.statusCode != 200) {
+      throw Exception('Failed to fetch task detail: ${res.body}');
+    }
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
 }

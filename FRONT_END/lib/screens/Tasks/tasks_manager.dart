@@ -169,4 +169,32 @@ class TasksProvider with ChangeNotifier {
       rethrow;
     }
   }
+
+  /// Lấy thông tin người được giao của một task
+  Future<Map<String, dynamic>> fetchAssigneeInfo(String taskId) async {
+    _setLoading(true);
+    try {
+      final info = await TaskService.getAssigneeInfo(taskId);
+      return info;
+    } catch (e) {
+      debugPrint('fetchAssigneeInfo error: $e');
+      rethrow;
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  /// Lấy chi tiết một task theo ID
+  Future<Map<String, dynamic>> fetchTaskDetail(String taskId) async {
+    _setLoading(true);
+    try {
+      final detail = await TaskService.getTaskDetail(taskId);
+      return detail;
+    } catch (e) {
+      debugPrint('fetchTaskDetail error: $e');
+      rethrow;
+    } finally {
+      _setLoading(false);
+    }
+  }
 }

@@ -186,5 +186,65 @@ export async function getAssignedTasks(req, res) {
   }
 }
 
+/* =========================
+   Fetch Assignee Info
+   GET /tasks/:taskId/assignee
+========================= */
+export async function getAssigneeInfo(req, res) {
+  const pbUser = req.pbUser;
+  const { taskId } = req.params;
+
+  try {
+    // Fetch the task by its ID
+    const task = await pbUser.collection("tasks").getOne(taskId);
+    const assigneeId = task.assignee;
+
+    // If there is no assignee set on the task
+    if (!assigneeId) {
+      return res.status(404).json({ error: "Task has no assignee" });
+    }
+
+    // Fetch the assignee's user information
+    const userInfo = await pbUser.collection("users").getOne(assigneeId);
+    return res.json(userInfo);
+  } catch (err) {
+    console.error("getAssigneeInfo error:", err.response?.data || err);
+    return res.status(400).json({ error: err.message });
+  }
+  
+}
+/**
+ * GET /tasks/:taskId
+ * Lấy chi tiết một task theo ID, kèm thông tin assignee nếu có
+ */
+export async function getTaskDetail(req, res) {
+  const pbUser = req.pbUser;
+  const { taskId } = req.params;
+
+  try {
+    // Lấy thông tin task
+    const task = await pbUser.collection("tasks").getOne(taskId);
+
+    // Nếu không có assignee thì trả luôn task
+    if (!task.assignee) {
+      return res.json(task);
+    }
+
+    // Nếu có assignee, lấy thêm thông tin user
+    const userInfo = await pbUser.collection("users").getOne(task.assignee);
+
+    // Gộp thông tin assignee vào response
+    const detailedTask = {
+      ...task,
+      assigneeInfo: userInfo,
+    };
+
+    return res.json(detailedTask);
+  } catch (err) {
+    console.error("getTaskDetail error:", err.response?.data || err);
+    return res.status(400).json({ error: err.message });
+  }
+}
+
 
 
