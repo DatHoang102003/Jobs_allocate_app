@@ -183,3 +183,25 @@ export async function searchMembersInGroup(req, res) {
   }
 }
 
+export async function leaveGroupByGroup(req, res) {
+  const pbUser = req.pbUser;
+  const { groupId } = req.params;
+
+  try {
+    // find my membership in that group
+    const ms = await pbUser
+      .collection("memberships")
+      .getFirstListItem(`group="${groupId}" && user="${req.user.id}"`);
+
+    if (!ms) {
+      return res
+        .status(404)
+        .json({ error: "You are not a member of this group" });
+    }
+
+    await pbUser.collection("memberships").delete(ms.id);
+    return res.json({ ok: true });
+  } catch (err) {
+    return res.status(400).json({ error: err.message });
+  }
+}

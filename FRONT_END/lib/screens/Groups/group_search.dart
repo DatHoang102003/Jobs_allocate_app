@@ -6,7 +6,7 @@ import '../Auth/auth_manager.dart';
 import '../Members/join_manager.dart';
 import '../Members/membership_manager.dart';
 import 'Group_detail/group_detail.dart';
-import 'groups_manager.dart';
+import 'groups_manager.dart'; // Provides GroupsProvider
 
 enum UserGroupStatus { admin, member, pending, notJoined }
 
@@ -61,9 +61,7 @@ class _GroupSearchState extends State<GroupSearch> {
   }
 
   Future<void> _handleSearch(String keyword) async {
-    // wait until the current build frame is done
     await Future.delayed(Duration.zero);
-
     if (keyword.trim().isEmpty) {
       if (mounted) setState(() => _searchResults = []);
       return;
@@ -190,16 +188,22 @@ class _GroupSearchState extends State<GroupSearch> {
                       : () async {
                           try {
                             if (userStatus == UserGroupStatus.member) {
+                              // Leave the group
                               await memberManager.leaveGroup(group.id);
+                              // Remove from local memberGroups cache
+                              groupsProvider.removeMemberGroup(group.id);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Left group 🎉')),
+                              );
                             } else {
                               await joinManager.sendJoinRequest(group.id);
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
-                                  content: Text('Join request sent 🎉'),
-                                ),
+                                    content: Text('Join request sent 🎉')),
                               );
                             }
 
+                            // Refresh search results
                             final updated = await groupsProvider
                                 .searchGroups(_searchController.text);
                             if (mounted)

@@ -144,4 +144,17 @@ class MembershipService {
     }
     return jsonDecode(res.body);
   }
+
+  /// DELETE /groups/:groupId/leave
+  static Future<Map<String, dynamic>> leaveGroupByGroup(String groupId) async {
+    final res = await http.delete(
+      Uri.parse('$_base/groups/$groupId/leave'),
+      headers: await _headers(),
+    );
+    if (res.statusCode != 200) {
+      final err = jsonDecode(res.body)['error'] ?? 'Failed to leave group';
+      throw Exception(err);
+    }
+    return jsonDecode(res.body);
+  }
 }

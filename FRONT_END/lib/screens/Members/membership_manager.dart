@@ -2,86 +2,90 @@ import 'package:flutter/material.dart';
 import '../../services/membership_service.dart';
 
 class MemberManager extends ChangeNotifier {
-  List<dynamic> _members = [];
-  List<dynamic> get members => _members;
+  // Cache of fetched members per group
   final Map<String, List<dynamic>> _membersByGroup = {};
 
-  bool _isLoading = false;
-  bool get isLoading => _isLoading;
+  // Current group’s members
+  List<dynamic> _members = [];
 
+  // My membership record ID within the current group
   String? _myMembershipId;
+
+  // Loading state
+  bool _isLoading = false;
+
+  bool get isLoading => _isLoading;
   String? get myMembershipId => _myMembershipId;
 
-  // Set loading and notify
-  void _setLoading(bool value) {
-    _isLoading = value;
-    notifyListeners();
-  }
+  /* ───────────────────────── Helpers ───────────────────────── */
 
-  // Set members and optionally detect my membershipId
-  void _setMembers(String groupId, List<dynamic> fetched, {String? myUserId}) {
+  /// Cache fetched members for [groupId] and compute myMembershipId if [myUserId] provided.
+  void _cache(
+    String groupId,
+    List<dynamic> fetched, {
+    String? myUserId,
+  }) {
     _membersByGroup[groupId] = fetched;
+    _members = fetched;
+
     if (myUserId != null) {
-      final myM = fetched.firstWhere(
+      final mine = fetched.firstWhere(
         (m) => m['user'] == myUserId,
         orElse: () => null,
       );
-      _myMembershipId = myM != null ? myM['id'] : null;
+      _myMembershipId = mine != null ? mine['id'] : null;
     } else {
       _myMembershipId = null;
     }
-    notifyListeners();
   }
 
-  /// Fetch members of a specific group and cache under that groupId
+  /* ───────────────────── Public API ───────────────────── */
+
+  /// Get cached members for [groupId], or empty if never fetched.
+  List<dynamic> membersOfGroup(String groupId) =>
+      _membersByGroup[groupId] ?? [];
+
+  /// Fetch members for [groupId] once; caches and notifies listeners.
   Future<void> fetchMembers(String groupId, {String? myUserId}) async {
-    _setLoading(true);
+    // If already cached, sync current list and return
+    if (_membersByGroup.containsKey(groupId)) {
+      _members = _membersByGroup[groupId]!;
+      return;
+    }
+
+    _isLoading = true;
     try {
       final fetched = await MembershipService.listMembersOfGroup(groupId);
-      _setMembers(groupId, fetched, myUserId: myUserId);
+      _cache(groupId, fetched, myUserId: myUserId);
     } catch (e) {
       debugPrint('❌ Failed to fetch members: $e');
     } finally {
-      _setLoading(false);
+      _isLoading = false;
+      notifyListeners();
     }
   }
 
-  /// Đồng bộ: trả về list members đã fetch (hoặc empty nếu chưa fetch)
-  List<dynamic> membersOfGroup(String groupId) {
-    return _membersByGroup[groupId] ?? [];
-  }
-
-  /// Clear cache toàn bộ hoặc chỉ 1 group
-  void clearMembers([String? groupId]) {
-    if (groupId != null) {
-      _membersByGroup.remove(groupId);
-    } else {
-      _membersByGroup.clear();
-    }
-    _myMembershipId = null;
-    notifyListeners();
-  }
-
-  /// Leave the group (giữ nguyên)
-  Future<void> leaveGroup(String membershipId) async {
-    _setLoading(true);
+  /// Leave the group identified by [groupId], remove cache and notify.
+  Future<void> leaveGroup(String groupId) async {
+    _isLoading = true;
     try {
-      await MembershipService.leaveGroup(membershipId);
-      clearMembers(); // hoặc clearMembers(groupId) nếu biết
+      await MembershipService.leaveGroupByGroup(groupId);
+      _membersByGroup.remove(groupId);
+      _members = [];
+      _myMembershipId = null;
     } catch (e) {
       debugPrint('❌ Failed to leave group: $e');
       rethrow;
     } finally {
-      _setLoading(false);
+      _isLoading = false;
+      notifyListeners();
     }
   }
 
-  /// Check if a specific user is a member of the group
-  bool isUserMember(String userId) {
-    return _members.any((m) => m['user'] == userId);
-  }
+  /// Returns true if [userId] is in the _members list of the current group.
+  bool isUserMember(String userId) => _members.any((m) => m['user'] == userId);
 
-  /// Search members in the group
+  /// Server-side search of members in [groupId] matching [keyword].
   Future<List<dynamic>> searchMembers(String groupId, String keyword) async {
     try {
       return await MembershipService.searchMembersInGroup(groupId, keyword);
