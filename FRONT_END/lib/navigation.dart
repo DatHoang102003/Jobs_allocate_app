@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'navigation_manager.dart';
-import 'screens/Groups/groups.dart';
+import 'screens/Groups/Overview/overview.dart';
 import 'screens/Home/home.dart';
 import 'screens/Tasks/task.dart';
 import 'package:task_manager_app/services/user_service.dart';

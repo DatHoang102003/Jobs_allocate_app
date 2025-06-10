@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:task_manager_app/screens/Auth/account.dart';
 import 'package:task_manager_app/screens/Auth/auth_manager.dart';
 import 'package:task_manager_app/screens/Groups/groups_manager.dart';
+import 'package:task_manager_app/screens/Members/invites_manager.dart';
 import 'package:task_manager_app/screens/Members/join_manager.dart';
 import 'package:task_manager_app/screens/Members/membership_manager.dart';
 import 'package:task_manager_app/screens/Tasks/tasks_manager.dart';
@@ -12,7 +13,7 @@ import 'package:task_manager_app/navigation_manager.dart';
 import 'package:task_manager_app/navigation.dart'; // BottomNavScreen
 import 'package:task_manager_app/screens/Auth/login.dart';
 import 'package:task_manager_app/screens/Auth/register.dart';
-import 'package:task_manager_app/screens/Groups/groups.dart';
+import 'package:task_manager_app/screens/Groups/Overview/overview.dart';
 import 'package:task_manager_app/screens/Tasks/task.dart';
 
 void main() {
@@ -52,6 +53,7 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => AuthManager()..init()),
         ChangeNotifierProvider(create: (_) => MemberManager()),
         ChangeNotifierProvider(create: (_) => JoinManager()),
+        ChangeNotifierProvider(create: (_) => InviteManager()),
       ],
       child: MaterialApp(
         title: 'Task Manager',

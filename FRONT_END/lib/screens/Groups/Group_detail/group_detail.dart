@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:task_manager_app/screens/Tasks/create_task.dart';
 import 'package:task_manager_app/screens/Tasks/tasks_manager.dart';
-import 'package:task_manager_app/services/group_service.dart';
-import 'package:task_manager_app/services/membership_service.dart';
 import 'package:task_manager_app/services/auth_service.dart';
-
+import 'package:task_manager_app/services/group_service.dart';
+import 'package:task_manager_app/services/invite_service.dart';
+import 'package:task_manager_app/services/membership_service.dart';
+import 'package:task_manager_app/services/user_service.dart';
 import '../../../models/groups.dart';
 import '../../Members/membership_manager.dart';
 import '../edit_dialog.dart';
@@ -33,9 +34,6 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
     _init();
   }
 
-  /* ─────────────────────────────────────────────
-     LOAD DATA
-  ───────────────────────────────────────────── */
   Future<void> _init() async {
     await AuthService.getUserId();
     await _fetch();
@@ -48,51 +46,152 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
       final members =
           await MembershipService.listMembersOfGroup(widget.groupId);
 
-      if (mounted) {
-        setState(() {
-          detail = {
-            'group': gDetail['group'],
-            'members': members,
-            'tasks': gDetail['tasks'] ?? [],
-          };
-          _loading = false;
-        });
-        // Cập nhật MemberManager với userId hiện tại
-        final memberManager =
-            Provider.of<MemberManager>(context, listen: false);
-        await memberManager.fetchMembers(widget.groupId,
-            myUserId: currentUserId);
-      }
+      if (!mounted) return;
+      setState(() {
+        detail = {
+          'group': gDetail['group'],
+          'members': members,
+          'tasks': gDetail['tasks'] ?? [],
+        };
+        _loading = false;
+      });
+      final memberManager = Provider.of<MemberManager>(context, listen: false);
+      await memberManager.fetchMembers(
+        widget.groupId,
+        myUserId: currentUserId,
+      );
     } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
   }
 
-  /* ─────────────────────────────────────────────
-     UI HELPERS
-  ───────────────────────────────────────────── */
   Future<void> _openCreateTaskDialog() async {
     final created = await showDialog<bool>(
       context: context,
-      builder: (_) => Dialog(child: CreateTaskScreen(groupId: widget.groupId)),
+      builder: (_) => Dialog(
+        child: CreateTaskScreen(groupId: widget.groupId),
+      ),
     );
     if (created == true) {
-      // 1) Refresh your “detail” map (so TasksTab’s count/header is correct):
       await _fetch();
-
-      // 2) ALSO tell the TasksProvider to reload from backend so the list updates:
       await context.read<TasksProvider>().loadTasksByGroup(widget.groupId);
     }
   }
 
   Future<void> _addMember() async {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Add Member functionality coming soon!')),
+    if (detail == null) return;
+
+    // 1) IDs of existing members
+    final allMembers = detail!['members'] as List<dynamic>;
+    final existingIds = allMembers.map((m) {
+      final u = m['expand']?['user'];
+      return u != null ? u['id'] as String : m['user'] as String;
+    }).toSet();
+
+    // 2) Fetch pending invites for this group
+    List<dynamic> invites;
+    try {
+      invites = await InviteService.listMyInvites();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load invites: $e')),
+      );
+      return;
+    }
+    final pendingIds = invites
+        .where((inv) =>
+            inv['group'] == widget.groupId && inv['status'] == 'pending')
+        .map((inv) => inv['invitee'] as String)
+        .toSet();
+
+    // 3) Fetch all users
+    List<dynamic> users;
+    try {
+      users = await UserService.getAllUsers();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load users: $e')),
+      );
+      return;
+    }
+
+    // 4) Show dialog
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        // copy pendingIds into a mutable set
+        final currentPending = Set<String>.from(pendingIds);
+
+        return StatefulBuilder(
+          builder: (ctx, setState) => AlertDialog(
+            title: const Text('Invite members'),
+            content: SizedBox(
+              width: double.maxFinite,
+              height: 400,
+              child: ListView.builder(
+                itemCount: users.length,
+                itemBuilder: (_, i) {
+                  final u = users[i];
+                  final id = u['id'] as String;
+                  final name = (u['name'] ?? u['email']) as String;
+                  // determine state
+                  final isMember = existingIds.contains(id);
+                  final isPending = currentPending.contains(id);
+
+                  Widget btn;
+                  if (isMember) {
+                    btn = ElevatedButton(
+                      onPressed: null,
+                      child: const Text('Member'),
+                    );
+                  } else if (isPending) {
+                    btn = ElevatedButton(
+                      onPressed: null,
+                      child: const Text('Pending'),
+                    );
+                  } else {
+                    btn = ElevatedButton(
+                      onPressed: () async {
+                        try {
+                          await InviteService.sendInviteRequest(
+                              widget.groupId, id);
+                          setState(() => currentPending.add(id));
+                        } catch (e) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                                content: Text('Invite failed for $name: $e')),
+                          );
+                        }
+                      },
+                      child: const Text('Send'),
+                    );
+                  }
+
+                  return ListTile(
+                    title: Text(name),
+                    subtitle: Text(u['email'] as String),
+                    trailing: btn,
+                  );
+                },
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('CLOSE'),
+              ),
+            ],
+          ),
+        );
+      },
     );
+
+    // 5) Refresh your detail so pendingIds updates next time
+    await _fetch();
   }
 
   Future<void> _editGroupInfo() async {
-    final g = detail!['group'];
+    final g = detail!['group'] as Map<String, dynamic>;
     final groupModel = Group(
       id: g['id'],
       name: g['name'],
@@ -102,129 +201,111 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
       updated: DateTime.parse(g['updated']),
     );
 
-    await showEditGroupDialog(context, groupModel, (updatedGroup) async {
-      await _fetch();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Updated successfully')),
-      );
-    });
-  }
-
-  Future<void> _deleteGroup() async {
-    final bool? confirmDelete = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Xác nhận xóa nhóm'),
-          content: const Text('Bạn có chắc chắn muốn xóa nhóm này?'),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Hủy'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Xóa'),
-            ),
-          ],
+    await showEditGroupDialog(
+      context,
+      groupModel,
+      (updatedGroup) async {
+        await _fetch();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Updated successfully')),
         );
       },
     );
+  }
 
-    if (confirmDelete != true) return;
+  Future<void> _deleteGroup() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Confirm delete'),
+        content: const Text('Are you sure you want to delete this group?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
 
     try {
       final groupsProvider =
           Provider.of<GroupsProvider>(context, listen: false);
-      final groupId = widget.groupId;
-      final currentGroup = groupsProvider.adminGroups.firstWhere(
-        (group) => group.id == groupId,
-        orElse: () => groupsProvider.memberGroups.firstWhere(
-          (group) => group.id == groupId,
-          orElse: () => throw Exception('Group not found'),
-        ),
-      );
+      final currentGroup = groupsProvider.adminGroups
+          .firstWhere((g) => g.id == widget.groupId, orElse: () {
+        return groupsProvider.memberGroups
+            .firstWhere((g) => g.id == widget.groupId);
+      });
       final groupData = {
         'id': currentGroup.id,
         'isAdmin': groupsProvider.adminGroups.contains(currentGroup),
       };
 
-      await groupsProvider.deleteGroup(groupId);
-
-      if (context.mounted) {
+      await groupsProvider.deleteGroup(widget.groupId);
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('Đã xóa nhóm thành công'),
-            duration: const Duration(seconds: 5),
+            content: const Text('Group deleted'),
             action: SnackBarAction(
-              label: 'Hoàn tác',
+              label: 'Undo',
               onPressed: () async {
                 try {
                   await groupsProvider.restoreGroup(groupData);
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Đã khôi phục nhóm')),
-                    );
-                  }
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Group restored')),
+                  );
                 } catch (e) {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Khôi phục nhóm thất bại: $e')),
-                    );
-                  }
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Restore failed: $e')),
+                  );
                 }
               },
             ),
           ),
         );
-
-        if (context.mounted) {
-          Navigator.of(context).pop();
-        }
+        Navigator.of(context).pop();
       }
     } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Xóa nhóm thất bại: $e')),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Delete failed: $e')),
+      );
     }
   }
 
   Future<void> _leaveGroup() async {
-    final confirmed = await showDialog<bool>(
+    final confirm = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (_) => AlertDialog(
         content: const Text('Are you sure you want to leave this group?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
+            onPressed: () => Navigator.pop(context, false),
             child: const Text('Cancel'),
           ),
           TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
+            onPressed: () => Navigator.pop(context, true),
             child: const Text('Leave'),
           ),
         ],
       ),
     );
-
-    if (confirmed != true) return;
+    if (confirm != true) return;
 
     try {
-      final membershipManager =
-          Provider.of<MemberManager>(context, listen: false);
+      final memberManager = Provider.of<MemberManager>(context, listen: false);
       final groupsProvider =
           Provider.of<GroupsProvider>(context, listen: false);
-      final membershipId = membershipManager.myMembershipId;
-
+      final membershipId = memberManager.myMembershipId;
       if (membershipId == null) {
-        throw Exception('You are not a member of this group');
+        throw Exception('Not a member');
       }
-
-      await membershipManager.leaveGroup(membershipId);
+      await memberManager.leaveGroup(membershipId);
       await groupsProvider.fetchGroups();
-
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('You have left the group')),
@@ -238,13 +319,9 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
     }
   }
 
-  /* ─────────────────────────────────────────────
-     BUILD
-  ───────────────────────────────────────────── */
   @override
   Widget build(BuildContext context) {
     final current = AuthService.currentUserId;
-
     if (_loading) {
       return const Scaffold(
         body: Center(child: CircularProgressIndicator()),
@@ -259,13 +336,11 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
     final g = detail!['group'] as Map<String, dynamic>;
     final membersAll = detail!['members'] as List<dynamic>;
     final ownerId = g['owner'] as String;
-
     final admins = membersAll
         .where((m) => (m['role'] as String? ?? 'member') == 'admin')
         .toList();
     final members = membersAll.where((m) => !admins.contains(m)).toList();
-
-    final bool canManage = ownerId == current ||
+    final canManage = ownerId == current ||
         membersAll.any((m) =>
             (m['role'] == 'admin') &&
             ((m['user'] == current) ||
@@ -277,13 +352,11 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
             (m['expand']?['user']?['name'] as String? ?? 'Unnamed'),
     };
 
-    /* ---- tabs & views ----------------------------------------------- */
     final tabs = <Tab>[
       const Tab(text: 'Members'),
       const Tab(text: 'Tasks'),
       if (canManage) const Tab(text: 'Requests'),
     ];
-
     final tabViews = <Widget>[
       MembersTab(
         groupId: widget.groupId,
@@ -331,7 +404,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
                       break;
                   }
                 },
-                itemBuilder: (BuildContext context) => const [
+                itemBuilder: (_) => const [
                   PopupMenuItem(
                       value: 'add_member', child: Text('Add members')),
                   PopupMenuItem(value: 'add_task', child: Text('Add task')),

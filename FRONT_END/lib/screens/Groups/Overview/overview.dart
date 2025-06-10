@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:task_manager_app/screens/Groups/groups_manager.dart';
 import 'package:task_manager_app/screens/Home/home.dart' show CustomDrawer;
-import '../../models/groups.dart';
-import '../../services/invite_service.dart';
-import '../Home/Widgets/group_card.dart';
-import '../Members/membership_manager.dart';
-import '../Tasks/tasks_manager.dart';
+import '../../../models/groups.dart';
+import '../../../services/invite_service.dart';
+import '../../Home/Widgets/group_card.dart';
+import '../../Members/membership_manager.dart';
+import '../../Tasks/tasks_manager.dart';
 
 class GroupScreen extends StatefulWidget {
   static const routeName = '/groups';
@@ -55,7 +55,7 @@ class _GroupScreenState extends State<GroupScreen>
           ),
           tabs: const [
             Tab(text: "Overview"),
-            Tab(text: "Requests"),
+            Tab(text: "Invites"),
           ],
         ),
       ),
@@ -172,18 +172,16 @@ class _InviteRequestsTabState extends State<InviteRequestsTab> {
     try {
       await InviteService.acceptInvite(id);
 
-      // Cập nhật danh sách lời mời
       setState(() {
         _invites.removeWhere((inv) => inv['id'] == id);
       });
 
-      // Gọi lại fetchGroups để cập nhật danh sách nhóm
       await Provider.of<GroupsProvider>(context, listen: false).fetchGroups();
 
-      _showSnackBar("Bạn đã tham gia nhóm thành công");
+      _showSnackBar("You have joined the group successfully");
     } catch (e) {
       debugPrint('Error accepting invite: $e');
-      _showSnackBar("Đã xảy ra lỗi khi tham gia nhóm");
+      _showSnackBar("An error occurred while joining the group");
     }
   }
 
@@ -193,10 +191,10 @@ class _InviteRequestsTabState extends State<InviteRequestsTab> {
       setState(() {
         _invites.removeWhere((inv) => inv['id'] == id);
       });
-      _showSnackBar("Bạn đã từ chối lời mời tham gia nhóm");
+      _showSnackBar("You have declined the group invite");
     } catch (e) {
       debugPrint('Error rejecting invite: $e');
-      _showSnackBar("Đã xảy ra lỗi khi từ chối lời mời");
+      _showSnackBar("An error occurred while declining the invite");
     }
   }
 
@@ -219,7 +217,7 @@ class _InviteRequestsTabState extends State<InviteRequestsTab> {
                     style:
                         TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
-                if (_invites.isEmpty) const Text("Không có lời mời nào."),
+                if (_invites.isEmpty) const Text("No invites."),
                 ..._invites.map((inv) {
                   final group = inv['expand']?['group'];
                   final groupName =
@@ -227,7 +225,7 @@ class _InviteRequestsTabState extends State<InviteRequestsTab> {
                   return Card(
                     child: ListTile(
                       title: Text(groupName),
-                      subtitle: const Text("Bạn đã được mời tham gia"),
+                      subtitle: const Text("You have been invited"),
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [

@@ -194,7 +194,7 @@ class CustomDrawer extends StatelessWidget {
                   Text(name,
                       style: const TextStyle(
                           fontWeight: FontWeight.bold, color: Colors.black)),
-                  Text('@$user', style: const TextStyle(color: Colors.black54)),
+                  Text('$user', style: const TextStyle(color: Colors.black54)),
                   TextButton(
                     onPressed: () {},
                     child: const Text('Edit Profile'),
