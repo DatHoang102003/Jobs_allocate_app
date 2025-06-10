@@ -83,11 +83,8 @@ class _AccountScreenState extends State<AccountScreen> {
       await _loadEverything();
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('Name updated')));
-    } else {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Could not update name')));
-      setState(() => _savingName = false);
     }
+    setState(() => _savingName = false);
   }
 
   /* ───────────────────── avatar upload ───────────────────── */

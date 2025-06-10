@@ -1,3 +1,4 @@
+// lib/screens/Home/home.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -43,10 +44,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final tp = context.watch<TasksProvider>();
     final mp = context.watch<MemberManager>();
 
-    // chỉ dùng loading của groups + members cho spinner toàn màn hình
     final isBusy = gp.isLoading || mp.isLoading;
-
-    // tạo list nhóm duy nhất
     final groups = {
       for (var g in gp.adminGroups) g.id: g,
       for (var g in gp.memberGroups) g.id: g,
@@ -54,7 +52,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFEDE8E6),
-      drawer: const CustomDrawer(),
+      drawer: const CustomDrawer(), // <-- This is now the only drawer
       appBar: const _HomeAppBar(),
       body: isBusy
           ? const Center(child: CircularProgressIndicator())
@@ -65,8 +63,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 children: [
                   const GroupSearch(),
                   const SizedBox(height: 24),
-
-                  // chỉ TodayTaskCard được rebuild khi TasksProvider thay đổi
                   TodayTaskCard(
                     taskProvider: tp,
                     selectedDate: selectedDate,
@@ -75,11 +71,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       tp.loadTasksForToday(date: date);
                     },
                   ),
-
                   const SizedBox(height: 24),
                   const InProgressSection(),
                   const SizedBox(height: 24),
-
                   const Text(
                     "Task Groups",
                     style: TextStyle(
@@ -88,7 +82,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                   const SizedBox(height: 12),
-
                   ...groups.map((g) => Padding(
                         padding: const EdgeInsets.only(bottom: 12),
                         child: GroupCard(
@@ -146,83 +139,92 @@ class _HomeAppBar extends StatelessWidget implements PreferredSizeWidget {
 class CustomDrawer extends StatelessWidget {
   const CustomDrawer({Key? key}) : super(key: key);
 
-  Future<Map<String, dynamic>?> _drawerProfile() =>
-      UserService.getDrawerProfile();
-
   @override
   Widget build(BuildContext context) {
     return Drawer(
       backgroundColor: Colors.deepPurple.shade100.withOpacity(0.9),
-      child: Column(
-        children: [
-          FutureBuilder<Map<String, dynamic>?>(
-            future: _drawerProfile(),
-            builder: (c, snap) {
-              if (snap.connectionState != ConnectionState.done) {
-                return const SizedBox(
-                  height: 180,
-                  child: Center(child: CircularProgressIndicator()),
-                );
-              }
-              final data = snap.data;
-              final avatar = data?['avatarUrl'] as String?;
-              final name = data?['name'] as String? ?? 'Mr. Jack';
-              final user = data?['username'] as String? ?? 'jacksparrow009';
-              return Column(
-                children: [
-                  const SizedBox(height: 50),
-                  GestureDetector(
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const AccountScreen(),
+      child: StatefulBuilder(
+        builder: (context, setState) => Column(
+          children: [
+            FutureBuilder<Map<String, dynamic>?>(
+              future: UserService.getDrawerProfile(),
+              builder: (c, snap) {
+                if (snap.connectionState != ConnectionState.done) {
+                  return const SizedBox(
+                    height: 180,
+                    child: Center(child: CircularProgressIndicator()),
+                  );
+                }
+                final data = snap.data;
+                final avatar = data?['avatarUrl'] as String?;
+                final name = data?['name'] as String? ?? 'Mr. Jack';
+                final user = data?['username'] as String? ?? 'jacksparrow009';
+
+                return Column(
+                  children: [
+                    const SizedBox(height: 50),
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const AccountScreen(),
+                          ),
+                        ).then((_) {
+                          // rebuild the drawer so it re-fetches the profile
+                          setState(() {});
+                        });
+                      },
+                      child: CircleAvatar(
+                        radius: 40,
+                        backgroundImage: avatar != null
+                            ? NetworkImage(avatar)
+                            : const AssetImage('assets/images/blueavatar.jpg')
+                                as ImageProvider,
+                        child: avatar == null
+                            ? const Icon(
+                                Icons.person,
+                                size: 40,
+                                color: Colors.white,
+                              )
+                            : null,
                       ),
                     ),
-                    child: CircleAvatar(
-                      radius: 40,
-                      backgroundImage: avatar != null
-                          ? NetworkImage(avatar)
-                          : const AssetImage('assets/images/blueavatar.jpg')
-                              as ImageProvider,
-                      child: avatar == null
-                          ? const Icon(Icons.person,
-                              size: 40, color: Colors.white)
-                          : null,
+                    const SizedBox(height: 10),
+                    Text(name,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold, color: Colors.black)),
+                    Text('$user',
+                        style: const TextStyle(color: Colors.black54)),
+                    TextButton(
+                      onPressed: () {},
+                      child: const Text('Edit Profile'),
                     ),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(name,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.bold, color: Colors.black)),
-                  Text('$user', style: const TextStyle(color: Colors.black54)),
-                  TextButton(
-                    onPressed: () {},
-                    child: const Text('Edit Profile'),
-                  ),
-                  const Divider(),
-                ],
-              );
-            },
-          ),
-          _DrawerItem(icon: Icons.home, title: 'Home', route: '/home'),
-          _DrawerItem(icon: Icons.group, title: 'Groups', route: '/groups'),
-          _DrawerItem(icon: Icons.task, title: 'Tasks', route: '/task'),
-          _DrawerItem(icon: Icons.info, title: 'Information', route: null),
-          _DrawerItem(icon: Icons.settings, title: 'Settings', route: null),
-          const Spacer(),
-          ListTile(
-            leading: const Icon(Icons.logout),
-            title: const Text('Log out'),
-            onTap: () async {
-              await AuthService.logoutUser();
-              Navigator.of(context).pushAndRemoveUntil(
-                MaterialPageRoute(builder: (_) => const LoginScreen()),
-                (_) => false,
-              );
-            },
-          ),
-          const SizedBox(height: 20),
-        ],
+                    const Divider(),
+                  ],
+                );
+              },
+            ),
+            _DrawerItem(icon: Icons.home, title: 'Home', route: '/home'),
+            _DrawerItem(icon: Icons.group, title: 'Groups', route: '/groups'),
+            _DrawerItem(icon: Icons.task, title: 'Tasks', route: '/task'),
+            _DrawerItem(icon: Icons.info, title: 'Information', route: null),
+            _DrawerItem(icon: Icons.settings, title: 'Settings', route: null),
+            const Spacer(),
+            ListTile(
+              leading: const Icon(Icons.logout),
+              title: const Text('Log out'),
+              onTap: () async {
+                await AuthService.logoutUser();
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (_) => const LoginScreen()),
+                  (_) => false,
+                );
+              },
+            ),
+            const SizedBox(height: 20),
+          ],
+        ),
       ),
     );
   }
