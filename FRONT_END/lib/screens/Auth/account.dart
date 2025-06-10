@@ -46,6 +46,8 @@ class _AccountScreenState extends State<AccountScreen> {
     _groupsCount = (await myGroups).length;
     _invitesCount =
         (await invites).where((e) => e['status'] == 'pending').length;
+
+    if (mounted) setState(() => _isLoading = false);
   }
 
   /* ───────────────────── edit name ───────────────────── */
