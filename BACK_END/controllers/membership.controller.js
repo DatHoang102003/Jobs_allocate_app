@@ -1,22 +1,33 @@
+// src/controllers/membership.controller.js
 import { pbAdmin } from "../services/pocketbase.js";
 
-/* Helper: fetch membership & group in one go */
-async function getMembership(pbUser, membershipId) {
-  const ms = await pbUser.collection("memberships").getOne(membershipId, {
-    expand: "group",
-  });
-  return ms;
+/* ── helper: first-or-null ─────────────────────────────────────────────── */
+async function safeFirst(pbUser, filter) {
+  try {
+    return await pbUser.collection("memberships").getFirstListItem(filter);
+  } catch (err) {
+    if (err?.status === 404) return null; // simply “not found”
+    throw err; // real error
+  }
 }
 
-/* 1. List ALL memberships across my groups */
+/* helper: expand group on a membership record */
+async function getMembership(pbUser, membershipId) {
+  return await pbUser.collection("memberships").getOne(membershipId, {
+    expand: "group",
+  });
+}
+
+/* ── 1. List ALL memberships across MY groups ──────────────────────────── */
 export async function listMyGroupMembers(req, res) {
   const pbUser = req.pbUser;
   const userId = req.user.id;
+
   try {
-    // all groups I belong to
     const myMships = await pbUser.collection("memberships").getFullList({
       filter: `user="${userId}"`,
     });
+
     const groupIds = myMships.map((m) => m.group);
     if (groupIds.length === 0) return res.json([]);
 
@@ -32,16 +43,20 @@ export async function listMyGroupMembers(req, res) {
   }
 }
 
-/* 2. List members of a specific group */
+/* ── 2. List members of ONE group ──────────────────────────────────────── */
 export async function listMembersOfGroup(req, res) {
   const pbUser = req.pbUser;
   const { groupId } = req.params;
+
   try {
-    // ensure requester is in the group
-    const inGroup = await pbUser
-      .collection("memberships")
-      .getFirstListItem(`group="${groupId}" && user="${req.user.id}"`);
-    if (!inGroup) return res.status(403).json({ error: "Forbidden" });
+    const inGroup = await safeFirst(
+      pbUser,
+      `group="${groupId}" && user="${req.user.id}"`
+    );
+
+    // ❤️  NEW behaviour:
+    //     not a member → don’t expose the list, but DON’T raise 403 either
+    if (!inGroup) return res.json([]);
 
     const list = await pbUser.collection("memberships").getFullList({
       filter: `group="${groupId}"`,
@@ -53,10 +68,11 @@ export async function listMembersOfGroup(req, res) {
   }
 }
 
-/* 3. Leave a group (delete my own membership) */
+/* ── 3. Leave a group (delete my OWN membership) ───────────────────────── */
 export async function leaveGroup(req, res) {
   const pbUser = req.pbUser;
   const { membershipId } = req.params;
+
   try {
     const ms = await getMembership(pbUser, membershipId);
     if (ms.user !== req.user.id)
@@ -69,60 +85,50 @@ export async function leaveGroup(req, res) {
   }
 }
 
-/* 4. Owner removes a member */
+/* ── 4. Owner / admin removes SOMEONE ELSE ─────────────────────────────── */
 export async function removeMember(req, res) {
   const pbUser = req.pbUser;
   const { groupId, membershipId } = req.params;
 
   try {
-    // 1) Fetch the group
     const group = await pbUser.collection("groups").getOne(groupId);
-
-    // 2) Fetch caller's membership in this group
-    const callerMs = await pbUser
-      .collection("memberships")
-      .getFirstListItem(`group="${groupId}" && user="${req.user.id}"`);
+    const callerMs = await safeFirst(
+      pbUser,
+      `group="${groupId}" && user="${req.user.id}"`
+    );
 
     const isOwner = group.owner === req.user.id;
     const isAdmin = callerMs?.role === "admin";
-
-    if (!isOwner && !isAdmin) {
+    if (!isOwner && !isAdmin)
       return res
         .status(403)
         .json({ error: "Only owner or admins can remove members" });
-    }
 
-    // 3) Fetch the *target* membership
     const targetMs = await pbUser
       .collection("memberships")
       .getOne(membershipId);
 
-    // 4) Protect the owner
-    if (targetMs.user === group.owner) {
+    if (targetMs.user === group.owner)
       return res.status(403).json({ error: "Cannot remove the group owner" });
-    }
 
-    // 5) Prevent admins from removing other admins
-    if (targetMs.role === "admin" && !isOwner) {
+    if (targetMs.role === "admin" && !isOwner)
       return res
         .status(403)
         .json({ error: "Only the owner can remove another admin" });
-    }
 
-    // 6) All checks passed → delete
     await pbAdmin.collection("memberships").delete(membershipId);
-    return res.json({ ok: true });
+    res.json({ ok: true });
   } catch (err) {
     console.error("removeMember error:", err.response?.data || err);
-    return res.status(400).json({ error: err.message });
+    res.status(400).json({ error: err.message });
   }
 }
 
-/* 5. Owner updates a member's role */
+/* ── 5. Owner updates a member's role ───────────────────────────────────── */
 export async function updateMemberRole(req, res) {
   const pbUser = req.pbUser;
   const { membershipId } = req.params;
-  const { role } = req.body; // "member" or "admin"
+  const { role } = req.body; // "member" | "admin"
 
   if (!["member", "admin"].includes(role))
     return res.status(400).json({ error: "Invalid role value" });
@@ -130,6 +136,7 @@ export async function updateMemberRole(req, res) {
   try {
     const ms = await getMembership(pbUser, membershipId);
     const group = await pbUser.collection("groups").getOne(ms.group);
+
     if (group.owner !== req.user.id)
       return res.status(403).json({ error: "Only owner can change roles" });
 
@@ -141,36 +148,30 @@ export async function updateMemberRole(req, res) {
     res.status(400).json({ error: err.message });
   }
 }
-/* 6. Search members in a specific group */
+
+/* ── 6. Search members INSIDE a group ───────────────────────────────────── */
 export async function searchMembersInGroup(req, res) {
   const pbUser = req.pbUser;
   const { groupId } = req.params;
-  const { query } = req.query; // text to search for
+  const { query } = req.query;
 
-  if (!query) {
-    return res.status(400).json({ error: "Missing search query" });
-  }
+  if (!query) return res.status(400).json({ error: "Missing search query" });
 
   try {
-    // Check if the user is a member of the group
-    const isMember = await pbUser
-      .collection("memberships")
-      .getFirstListItem(`group="${groupId}" && user="${req.user.id}"`);
+    const isMember = await safeFirst(
+      pbUser,
+      `group="${groupId}" && user="${req.user.id}"`
+    );
+    if (!isMember) return res.json([]); // NEW → empty instead of 403
 
-    if (!isMember) {
-      return res.status(403).json({ error: "Forbidden" });
-    }
-
-    // Get all memberships in the group and expand user
     const members = await pbUser.collection("memberships").getFullList({
       filter: `group="${groupId}"`,
       expand: "user",
     });
 
-    // Filter by query on expanded user's name or email
+    const q = query.toLowerCase();
     const filtered = members.filter((m) => {
       const user = m.expand?.user;
-      const q = query.toLowerCase();
       return (
         user?.username?.toLowerCase().includes(q) ||
         user?.email?.toLowerCase().includes(q)
@@ -183,25 +184,24 @@ export async function searchMembersInGroup(req, res) {
   }
 }
 
+/* ── 7. “Leave by groupId” convenience route ───────────────────────────── */
 export async function leaveGroupByGroup(req, res) {
   const pbUser = req.pbUser;
   const { groupId } = req.params;
 
   try {
-    // find my membership in that group
-    const ms = await pbUser
-      .collection("memberships")
-      .getFirstListItem(`group="${groupId}" && user="${req.user.id}"`);
-
-    if (!ms) {
+    const ms = await safeFirst(
+      pbUser,
+      `group="${groupId}" && user="${req.user.id}"`
+    );
+    if (!ms)
       return res
         .status(404)
         .json({ error: "You are not a member of this group" });
-    }
 
     await pbUser.collection("memberships").delete(ms.id);
-    return res.json({ ok: true });
+    res.json({ ok: true });
   } catch (err) {
-    return res.status(400).json({ error: err.message });
+    res.status(400).json({ error: err.message });
   }
 }
